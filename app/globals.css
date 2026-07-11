@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: #0b0f14;
+  --color-surface: #161b22;
+  --color-surface-raised: #1a1f27;
+  --color-line: #232a33;
+  --color-line-soft: #1c222b;
+
+  --color-accent-green: #00CF90;
+  --color-accent-green-strong: #34d399;
+  --color-accent-blue: #3b82f6;
+  --color-accent-blue-strong: #2563eb;
+
+  --color-amber: #f59e0b;
+  --color-red: #f87171;
+  --color-purple: #a78bfa;
+
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-accent-green);
+  color: #0b0f14;
+}
+
+* {
+  scrollbar-color: #2a323d #0b0f14;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #2a323d;
+  border-radius: 999px;
+}
+
+/* Animated looping gradient border (used on dashboard stat cards) */
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes border-spin {
+  to {
+    --border-angle: 360deg;
+  }
+}
+
+.animated-border-card {
+  position: relative;
+  border-radius: 1rem;
+}
+
+.animated-border-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--border-angle), #00CF90, #3b82f6, #00CF90);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: border-spin 1s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animated-border-card::before {
+    animation: none;
+  }
+}
+
+/* @property --a {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.animated-border-card {
+  position: relative;
+  border-radius: 1rem;
+}
+.animated-border-card::before {
+  position: absolute;
+  border-radius: 14px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(#0E1217, #0E1217) padding-box,
+    conic-gradient(
+      from var(--a),
+      transparent 0deg,
+      transparent 140deg,
+      #00CF90 165deg,
+      #7fffdf  180deg,
+      #00CF90  195deg,
+      transparent 220deg,
+      transparent 320deg,
+      #016FBF  335deg,
+      #5dbfff  350deg,
+      #016FBF  5deg,
+      transparent 30deg
+    ) border-box;
+  animation: spin 4s linear infinite;
+}
+
+@keyframes spin { to { --a: 360deg; } } */
