@@ -18,21 +18,36 @@ import { Avatar } from "@/components/ui/Avatar";
 import { logoutAction } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/dal";
 
-const BASE_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Customers", href: "/admin/customers", icon: Users },
-  { label: "Billing", href: "/admin/billing", icon: Receipt },
-  { label: "Service Plans", href: "/admin/plans", icon: Wifi },
-  { label: "CDR Upload", href: "/admin/cdr-upload", icon: UploadCloud },
-  { label: "Terminals", href: "/admin/terminals", icon: Satellite },
-  { label: "Support", href: "/admin/support", icon: LifeBuoy },
-];
+function baseNav(unreadSupportCount: number): NavItem[] {
+  return [
+    { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+    { label: "Customers", href: "/admin/customers", icon: Users },
+    { label: "Billing", href: "/admin/billing", icon: Receipt },
+    { label: "Service Plans", href: "/admin/plans", icon: Wifi },
+    { label: "CDR Upload", href: "/admin/cdr-upload", icon: UploadCloud },
+    { label: "Terminals", href: "/admin/terminals", icon: Satellite },
+    {
+      label: "Support",
+      href: "/admin/support",
+      icon: LifeBuoy,
+      badge: unreadSupportCount > 0 ? unreadSupportCount : undefined,
+    },
+  ];
+}
 
-export function AdminShell({ user, children }: { user: CurrentUser; children: ReactNode }) {
+export function AdminShell({
+  user,
+  unreadSupportCount = 0,
+  children,
+}: {
+  user: CurrentUser;
+  unreadSupportCount?: number;
+  children: ReactNode;
+}) {
   const [, startTransition] = useTransition();
 
   const navItems: NavItem[] = [
-    ...BASE_NAV,
+    ...baseNav(unreadSupportCount),
     ...(user.role === "SUPER_ADMIN"
       ? [{ label: "Team", href: "/admin/team", icon: UserCog }]
       : []),

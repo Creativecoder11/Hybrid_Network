@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
 import { TicketThread } from "@/components/support/TicketThread";
 import { AdminTicketStatusControl } from "@/components/admin/AdminTicketStatusControl";
+import { markTicketRead } from "@/lib/support/unread";
 import type { TicketDetail } from "@/lib/types/support";
 
 export const metadata: Metadata = {
@@ -22,6 +23,10 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
     .populate("replies.author")
     .lean();
   if (!ticket) notFound();
+
+  if (ticket.adminUnread) {
+    await markTicketRead(id);
+  }
 
   const customer = ticket.customer as unknown as { _id: string; name: string; customerCode?: string } | null;
   const assignee = ticket.assignedTo as unknown as { _id: string; name: string } | null;

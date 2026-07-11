@@ -81,10 +81,12 @@ export async function replyTicketAction(
   }
 
   ticket.replies.push({ author: user.id, message: parsed.data.message, createdAt: new Date() });
-  if (user.role === "CUSTOMER" && ticket.status === "RESOLVED") {
-    ticket.status = "OPEN";
-  } else if (user.role !== "CUSTOMER" && ticket.status === "OPEN") {
-    ticket.status = "IN_PROGRESS";
+  if (user.role === "CUSTOMER") {
+    if (ticket.status === "RESOLVED") ticket.status = "OPEN";
+    ticket.adminUnread = true;
+  } else {
+    if (ticket.status === "OPEN") ticket.status = "IN_PROGRESS";
+    ticket.adminUnread = false;
   }
   await ticket.save();
 

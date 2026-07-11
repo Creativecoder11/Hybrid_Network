@@ -25,6 +25,7 @@ const SupportTicketSchema = new Schema(
     category: { type: String, enum: TICKET_CATEGORIES, default: "GENERAL" },
     assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
     resolvedAt: { type: Date, default: null },
+    adminUnread: { type: Boolean, default: true },
     replies: { type: [ReplySchema], default: [] },
   },
   { timestamps: true }
@@ -32,6 +33,7 @@ const SupportTicketSchema = new Schema(
 
 SupportTicketSchema.index({ status: 1 });
 SupportTicketSchema.index({ assignedTo: 1 });
+SupportTicketSchema.index({ adminUnread: 1 });
 
 export type SupportTicketDoc = InferSchemaType<typeof SupportTicketSchema>;
 

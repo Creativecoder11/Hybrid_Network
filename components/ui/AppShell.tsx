@@ -11,6 +11,7 @@ export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  badge?: number;
 };
 
 function LogoMark() {
@@ -73,7 +74,12 @@ export function AppShell({
               <span className="absolute inset-y-0 left-0.5 w-0.75 rounded-bl-2xl rounded-tl-2xl bg-accent-green" />
             )}
             <Icon className="size-4.5 shrink-0" />
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {!!item.badge && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red px-1.5 text-[10px] font-semibold text-white">
+                {item.badge > 99 ? "99+" : item.badge}
+              </span>
+            )}
           </Link>
         );
       })}

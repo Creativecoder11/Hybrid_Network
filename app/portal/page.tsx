@@ -5,26 +5,44 @@ import { ActivityLog } from "@/models/ActivityLog";
 import { requireRole } from "@/lib/auth/dal";
 import { syncOverdueStatuses } from "@/lib/billing/statusSync";
 import { getActivePlanInfo, getUsageForPeriod, currentPeriodMonth } from "@/lib/portal/data";
+import { listTerminals } from "@/lib/terminals/service";
 import { OverviewClient } from "@/components/portal/OverviewClient";
-import type { PortalActivityRow, PortalInvoiceRow } from "@/lib/types/portal";
+import type { PortalActivityRow, PortalInvoiceRow, PortalTerminalSummary } from "@/lib/types/portal";
 
 export const metadata: Metadata = {
   title: "Overview | Hybrid Networks Portal",
 };
 
-export default async function PortalOverviewPage() {
+export default async function PortalOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireRole(["CUSTOMER"], "/admin");
+  const sp = await searchParams;
+  const periodParam = typeof sp.period === "string" ? sp.period : "";
+  const periodMonth = /^\d{6}$/.test(periodParam) ? periodParam : currentPeriodMonth();
 
   await syncOverdueStatuses();
   await connectDB();
 
-  const [plan, usage, outstandingInvoice, latestBillsRaw, activityRaw] = await Promise.all([
+  const [plan, usage, outstandingInvoice, latestBillsRaw, activityRaw, terminals] = await Promise.all([
     getActivePlanInfo(user.id),
-    getUsageForPeriod(user.id, currentPeriodMonth()),
+    getUsageForPeriod(user.id, periodMonth),
     Invoice.findOne({ customer: user.id, status: { $in: ["DUE", "OVERDUE", "SENT"] } }).sort({ dueDate: 1 }),
     Invoice.find({ customer: user.id }).sort({ issueDate: -1 }).limit(5).lean(),
     ActivityLog.find({ targetCustomer: user.id }).sort({ createdAt: -1 }).limit(6).lean(),
+    listTerminals({ customerId: user.id }),
   ]);
+
+  const terminalSummary: PortalTerminalSummary = {
+    totalCount: terminals.length,
+    activeCount: terminals.filter((t) => t.live.onlineStatus === "ONLINE").length,
+    avgThroughputMbps:
+      terminals.length > 0
+        ? Math.round((terminals.reduce((sum, t) => sum + t.network.throughputMbps, 0) / terminals.length) * 10) / 10
+        : 0,
+  };
 
   const currentBill: PortalInvoiceRow | null = outstandingInvoice
     ? {
@@ -63,6 +81,8 @@ export default async function PortalOverviewPage() {
       currentBill={currentBill}
       plan={plan}
       usage={usage}
+      periodMonth={periodMonth}
+      terminalSummary={terminalSummary}
       latestBills={latestBills}
       activity={activity}
     />

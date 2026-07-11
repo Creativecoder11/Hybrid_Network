@@ -41,6 +41,12 @@ export type PortalActivityRow = {
   createdAt: string;
 };
 
+export type PortalTerminalSummary = {
+  totalCount: number;
+  activeCount: number;
+  avgThroughputMbps: number;
+};
+
 export type PortalUsageHistoryRow = {
   periodMonth: string;
   volumeDataGB: number;
