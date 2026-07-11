@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Card } from "@/components/ui/Card";
 
@@ -15,11 +15,12 @@ export function StatCard({
   label: string;
   value: string;
   sublabel?: string;
-  icon?:string;
+  icon?: LucideIcon | string;
   trend?: { value: string; positive: boolean };
   tone?: "green" | "blue" | "amber" | "red" | "purple" | "neutral";
   animatedBorder?: boolean;
 }) {
+  const Icon = typeof icon === "string" ? null : icon;
   const iconToneClasses: Record<string, string> = {
     green: "bg-accent-green/15 text-accent-green",
     blue: "bg-accent-blue/15 text-accent-blue",
@@ -35,7 +36,11 @@ export function StatCard({
         <p className="text-sm font-medium">{label}</p>
         {icon && (
           <span className={cn("flex size-8 items-center justify-center rounded-lg", iconToneClasses[tone])}>
-            <Image src={icon} alt={label} width={32} height={32} />
+            {typeof icon === "string" ? (
+              <Image src={icon} alt={label} width={32} height={32} />
+            ) : (
+              Icon && <Icon className="size-4" />
+            )}
           </span>
         )}
       </div>
