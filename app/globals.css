@@ -1,7 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Bayon&family=Nunito+Sans:wght@400;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Nunito Sans", var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-title: "Bayon", cursive;
 
   --color-bg: #0b0f14;
   --color-surface: #161b22;
@@ -31,6 +33,16 @@ body {
   background: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.title {
+  font-family: var(--font-title);
 }
 
 ::selection {
