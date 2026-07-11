@@ -19,11 +19,11 @@ export function formatBytesAuto(bytes: number | null | undefined): string {
 
 export function formatCurrency(
   amount: number | null | undefined,
-  currency = "MYR"
+  currency = "USD"
 ): string {
   const value = amount ?? 0;
   try {
-    return new Intl.NumberFormat("en-MY", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
       minimumFractionDigits: 2,

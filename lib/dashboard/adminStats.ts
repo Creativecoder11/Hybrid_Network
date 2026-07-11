@@ -126,7 +126,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       customerCode: v.code,
       planName: planByCustomer.get(id) ?? "",
       total: v.total,
-      currency: "MYR",
+      currency: "USD",
     }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
@@ -153,7 +153,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       periodMonth: inv.periodMonth,
       usageGB: Math.round(((usageByCustomerPeriod.get(`${customerId}|${inv.periodMonth}`) ?? 0) / GB) * 100) / 100,
       total: inv.total,
-      currency: inv.currency ?? "MYR",
+      currency: inv.currency ?? "USD",
       status: inv.status as "DUE" | "OVERDUE",
     };
   });
@@ -166,7 +166,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     planTotals.set(name, (planTotals.get(name) ?? 0) + inv.total);
   }
   const revenueByPlan = Array.from(planTotals.entries())
-    .map(([planName, total]) => ({ planName, total, currency: "MYR" }))
+    .map(([planName, total]) => ({ planName, total, currency: "USD" }))
     .sort((a, b) => b.total - a.total);
 
   // ----- Revenue by usage type (this month's collections, from line item descriptions) -----

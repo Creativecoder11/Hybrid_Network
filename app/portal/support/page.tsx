@@ -20,9 +20,13 @@ export default async function PortalSupportPage() {
     ticketNumber: t.ticketNumber,
     customerId: user.id,
     customerName: user.name,
+    customerCode: "",
+    category: t.category ?? "GENERAL",
     subject: t.subject,
     status: t.status,
     replyCount: t.replies?.length ?? 0,
+    assignedToId: "",
+    assignedToName: "",
     createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",
     updatedAt: (t.updatedAt as Date | undefined)?.toISOString() ?? "",
   }));

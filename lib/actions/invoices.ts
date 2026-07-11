@@ -50,6 +50,8 @@ export async function createInvoiceAction(
     subscriptionId: str(formData, "subscriptionId") || null,
     periodMonth: str(formData, "periodMonth"),
     dueDate: str(formData, "dueDate"),
+    amount: str(formData, "amount") || undefined,
+    status: str(formData, "status") || undefined,
     extraLineItems,
     taxRate: str(formData, "taxRate") || undefined,
   });
@@ -74,23 +76,38 @@ export async function createInvoiceAction(
 
   const usage = await UsageRecord.findOne({ customer: customer._id, periodMonth: parsed.data.periodMonth });
 
-  const { lineItems, subtotal } = computeInvoiceLineItems({
-    planName: plan.name,
-    monthlyPrice: plan.monthlyPrice,
-    dataAllowanceGB: plan.dataAllowanceGB ?? null,
-    voiceMinutes: plan.voiceMinutes ?? null,
-    overageRatePerGB: plan.overageRatePerGB ?? 0,
-    overageRatePerMin: plan.overageRatePerMin ?? 0,
-    usedDataBytes: usage?.volumeDataBytes ?? 0,
-    usedVoiceMin: usage?.volumeMin ?? 0,
-    extraLineItems: parsed.data.extraLineItems,
-  });
+  const { lineItems, subtotal } =
+    parsed.data.amount !== undefined
+      ? {
+          lineItems: [
+            {
+              description: `${plan.name} — Monthly Subscription`,
+              quantity: 1,
+              unit: "month",
+              unitPrice: parsed.data.amount,
+              amount: parsed.data.amount,
+            },
+          ],
+          subtotal: parsed.data.amount,
+        }
+      : computeInvoiceLineItems({
+          planName: plan.name,
+          monthlyPrice: plan.monthlyPrice,
+          dataAllowanceGB: plan.dataAllowanceGB ?? null,
+          voiceMinutes: plan.voiceMinutes ?? null,
+          overageRatePerGB: plan.overageRatePerGB ?? 0,
+          overageRatePerMin: plan.overageRatePerMin ?? 0,
+          usedDataBytes: usage?.volumeDataBytes ?? 0,
+          usedVoiceMin: usage?.volumeMin ?? 0,
+          extraLineItems: parsed.data.extraLineItems,
+        });
 
   const settings = await Settings.findOne({ key: "GLOBAL" });
   const taxRate = parsed.data.taxRate ?? settings?.taxRate ?? 0;
   const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
   const total = Math.round((subtotal + taxAmount) * 100) / 100;
 
+  const initialStatus = parsed.data.status ?? "DRAFT";
   const invoiceNumber = await generateInvoiceNumber();
 
   const invoice = await Invoice.create({
@@ -106,8 +123,10 @@ export async function createInvoiceAction(
     taxLabel: settings?.taxLabel ?? "GST",
     taxAmount,
     total,
-    currency: plan.currency ?? "MYR",
-    status: "DRAFT",
+    currency: plan.currency ?? "USD",
+    status: initialStatus,
+    paidDate: initialStatus === "PAID" ? new Date() : null,
+    paymentMethod: initialStatus === "PAID" ? "Manual Entry" : "",
     createdBy: admin.id,
   });
 

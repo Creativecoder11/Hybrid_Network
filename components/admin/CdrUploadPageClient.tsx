@@ -57,8 +57,8 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">CDR Upload</h1>
-        <p className="text-sm text-text-muted">
+        <p className="text-2xl font-bold text-text-primary">CDR Upload</p>
+        <p className="text-sm ">
           Upload a Rated CDR export (.xlsx or .csv) to match usage to customers and update their
           billing period totals.
         </p>
@@ -125,7 +125,7 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
       </Card>
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-text-primary">Upload History</h2>
+        <p className="mb-3 text-sm font-semibold text-text-primary">Upload History</p>
         {batches.length === 0 ? (
           <EmptyState icon={FileSpreadsheet} title="No CDR files uploaded yet" />
         ) : (

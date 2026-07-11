@@ -32,6 +32,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { CustomerFormModal } from "@/components/admin/CustomerFormModal";
+import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { deleteCustomerAction } from "@/lib/actions/customers";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import type { CustomerRow, CustomerStats, PlanOption } from "@/lib/types/admin";
@@ -83,6 +84,7 @@ export function CustomersPageClient({
     null,
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerRow | null>(null);
 
   function updateParams(next: Record<string, string | number>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -114,14 +116,15 @@ export function CustomersPageClient({
     setModalOpen(true);
   }
 
-  async function handleDelete(customer: CustomerRow) {
-    if (!confirm(`Delete ${customer.name}? This cannot be undone.`)) return;
-    setDeletingId(customer.id);
-    const result = await deleteCustomerAction(customer.id);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    const result = await deleteCustomerAction(deleteTarget.id);
     setDeletingId(null);
     if (result?.error) toast.error(result.error);
     else {
       toast.success(result?.success ?? "Customer deleted.");
+      setDeleteTarget(null);
       router.refresh();
     }
   }
@@ -130,8 +133,8 @@ export function CustomersPageClient({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Customers</h1>
-          <p className="text-sm text-text-muted">
+          <p className="text-2xl font-bold text-text-primary">Customers</p>
+          <p className="text-sm">
             Manage every customer account and subscription.
           </p>
         </div>
@@ -145,7 +148,8 @@ export function CustomersPageClient({
         <StatCard
           label="Total Customers"
           value={String(stats.total)}
-          icon={Users}
+          icon="/assets/icons/Icon Container3.svg"
+          animatedBorder
           sublabel={`${formatCurrency(stats.overdueAmount)} owed`}
           tone="blue"
         />
@@ -154,21 +158,24 @@ export function CustomersPageClient({
           value={String(stats.active)}
           // sublabel={`${stats.activeRate.toFixed(1)}% active rate`}
           sublabel={`${formatCurrency(stats.overdueAmount)} owed`}
-          icon={UserCheck}
+          icon="/assets/icons/Icon Container2.svg"
+          animatedBorder
           tone="green"
         />
         <StatCard
           label="Overdue Accounts"
           value={String(stats.overdueCount)}
           sublabel={`${formatCurrency(stats.overdueAmount)} owed`}
-          icon={AlertTriangle}
+          icon="/assets/icons/Icon Container1.svg"
+          animatedBorder
           tone="red"
         />
         <StatCard
           label="Suspended Accounts"
           value={String(stats.suspended)}
           sublabel={`${stats.suspendedRate.toFixed(1)}% of base`}
-          icon={UserX}
+          icon="/assets/icons/Icon Container1.svg"
+          animatedBorder
           tone="amber"
         />
       </div>
@@ -182,25 +189,29 @@ export function CustomersPageClient({
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
-        <Select
-          value={status}
-          onChange={(e) => updateParams({ status: e.target.value })}
-          className="sm:w-44"
-        >
-          <option value="ALL">All statuses</option>
-          <option value="ACTIVE">Active</option>
-          <option value="SUSPENDED">Suspended</option>
-          <option value="INVITED">Inactive</option>
-        </Select>
-        <Select
-          value={sort}
-          onChange={(e) => updateParams({ sort: e.target.value })}
-          className="sm:w-44"
-        >
-          <option value="date_desc">Newest first</option>
-          <option value="date_asc">Oldest first</option>
-          <option value="name_asc">Name (A-Z)</option>
-        </Select>
+        <div>
+          <Select
+            value={status}
+            onChange={(e) => updateParams({ status: e.target.value })}
+            className="sm:w-44"
+          >
+            <option value="ALL">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Suspended</option>
+            <option value="INVITED">Inactive</option>
+          </Select>
+        </div>
+        <div>
+          <Select
+            value={sort}
+            onChange={(e) => updateParams({ sort: e.target.value })}
+            className="sm:w-44"
+          >
+            <option value="date_desc">Newest first</option>
+            <option value="date_asc">Oldest first</option>
+            <option value="name_asc">Name (A-Z)</option>
+          </Select>
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -277,7 +288,7 @@ export function CustomersPageClient({
                       </Link>
                       {canDelete && (
                         <button
-                          onClick={() => handleDelete(c)}
+                          onClick={() => setDeleteTarget(c)}
                           disabled={deletingId === c.id}
                           className="rounded-lg p-1.5 text-text-muted hover:bg-red/10 hover:text-red disabled:opacity-50"
                           aria-label="Delete"
@@ -308,12 +319,22 @@ export function CustomersPageClient({
           key={editingCustomer?.id ?? "new"}
           customer={editingCustomer}
           plans={plans}
+          
           onClose={() => {
             setModalOpen(false);
             router.refresh();
           }}
         />
       )}
+
+      <DeleteConfirmModal
+        open={!!deleteTarget}
+        title={`Delete ${deleteTarget?.name ?? "this customer"}?`}
+        description="This customer and their account details will be permanently deleted and cannot be recovered."
+        loading={!!deleteTarget && deletingId === deleteTarget.id}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

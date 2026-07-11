@@ -12,6 +12,8 @@ export const createInvoiceSchema = z.object({
   subscriptionId: z.string().optional().nullable(),
   periodMonth: z.string().regex(/^\d{6}$/, "Format must be YYYYMM"),
   dueDate: z.string().min(1),
+  amount: z.coerce.number().min(0).optional(),
+  status: z.enum(["DRAFT", "SENT", "DUE", "OVERDUE", "PAID", "CANCELLED"]).optional(),
   extraLineItems: z.array(lineItemSchema).optional().default([]),
   taxRate: z.coerce.number().min(0).max(100).optional(),
 });

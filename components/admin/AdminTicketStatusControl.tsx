@@ -30,17 +30,21 @@ export function AdminTicketStatusControl({
   }
 
   return (
-    <Select
-      value={status}
-      disabled={pending}
-      onChange={(e) => handleChange(e.target.value as (typeof STATUSES)[number])}
-      className="w-40"
-    >
-      {STATUSES.map((s) => (
-        <option key={s} value={s}>
-          {s.replace("_", " ")}
-        </option>
-      ))}
-    </Select>
+    <div>
+      <Select
+        value={status}
+        disabled={pending}
+        onChange={(e) =>
+          handleChange(e.target.value as (typeof STATUSES)[number])
+        }
+        className="w-40"
+      >
+        {STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {s.replace("_", " ")}
+          </option>
+        ))}
+      </Select>
+    </div>
   );
 }

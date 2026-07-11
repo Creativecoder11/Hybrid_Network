@@ -105,7 +105,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         planName: (s.plan as unknown as { name: string } | null)?.name ?? "Unknown plan",
         planProvider: (s.plan as unknown as { provider: string } | null)?.provider ?? "",
         monthlyPrice: (s.plan as unknown as { monthlyPrice: number } | null)?.monthlyPrice ?? 0,
-        currency: (s.plan as unknown as { currency: string } | null)?.currency ?? "MYR",
+        currency: (s.plan as unknown as { currency: string } | null)?.currency ?? "USD",
         status: s.status,
         startDate: (s.startDate as Date | undefined)?.toISOString() ?? "",
         endDate: s.endDate ? (s.endDate as Date).toISOString() : null,
@@ -128,7 +128,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     consumptionMin: u.consumptionMin ?? 0,
     consumptionMsg: u.consumptionMsg ?? 0,
     source: u.source,
-    currency: u.currency ?? "MYR",
+    currency: u.currency ?? "USD",
   }));
 
   const invoiceRows: InvoiceRow[] = invoices.map((inv) => ({
@@ -138,7 +138,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     issueDate: (inv.issueDate as Date).toISOString(),
     dueDate: (inv.dueDate as Date).toISOString(),
     total: inv.total,
-    currency: inv.currency ?? "MYR",
+    currency: inv.currency ?? "USD",
     status: inv.status,
   }));
 
@@ -152,7 +152,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     cardName: r.cardName ?? "",
     service: r.service ?? "",
     priceTotal: r.priceTotal ?? 0,
-    currency: r.priceCurrency ?? "MYR",
+    currency: r.priceCurrency ?? "USD",
   }));
 
   const activityRows: ActivityLogRow[] = activity.map((a) => ({

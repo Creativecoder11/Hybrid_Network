@@ -16,20 +16,29 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
   const { id } = await params;
 
   await connectDB();
-  const ticket = await SupportTicket.findById(id).populate("customer").populate("replies.author").lean();
+  const ticket = await SupportTicket.findById(id)
+    .populate("customer")
+    .populate("assignedTo")
+    .populate("replies.author")
+    .lean();
   if (!ticket) notFound();
 
-  const customer = ticket.customer as unknown as { _id: string; name: string } | null;
+  const customer = ticket.customer as unknown as { _id: string; name: string; customerCode?: string } | null;
+  const assignee = ticket.assignedTo as unknown as { _id: string; name: string } | null;
 
   const detail: TicketDetail = {
     id: ticket._id.toString(),
     ticketNumber: ticket.ticketNumber,
     customerId: customer?._id?.toString() ?? "",
     customerName: customer?.name ?? "Unknown",
+    customerCode: customer?.customerCode ?? "",
+    category: ticket.category ?? "GENERAL",
     subject: ticket.subject,
     status: ticket.status,
     message: ticket.message,
     replyCount: ticket.replies.length,
+    assignedToId: assignee?._id?.toString() ?? "",
+    assignedToName: assignee?.name ?? "",
     createdAt: (ticket.createdAt as Date | undefined)?.toISOString() ?? "",
     updatedAt: (ticket.updatedAt as Date | undefined)?.toISOString() ?? "",
     replies: ticket.replies.map((r) => {

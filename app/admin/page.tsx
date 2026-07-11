@@ -13,6 +13,8 @@ import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OutstandingBillRowActions } from "@/components/admin/OutstandingBillRowActions";
 import { formatCurrency, formatDate, formatPeriodMonth } from "@/lib/utils/format";
 
+
+
 function currentPeriodMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -36,10 +38,10 @@ export default async function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-text-muted">Admin Dashboard</p>
-        <h1 className="mt-1 text-xl font-bold text-text-primary">
+        <p className="mt-1 text-2xl font-bold">
           Welcome back, <span className="text-accent-green">{user.name.split(" ")[0]}</span>
-        </h1>
-        <p className="mt-1 text-sm text-text-muted">
+        </p>
+        <p className="mt-1 text-sm ">
           {formatDate(new Date().toISOString())} · Billing cycle closes in {stats.billingCycleDaysLeft} day
           {stats.billingCycleDaysLeft === 1 ? "" : "s"}
         </p>
@@ -49,7 +51,7 @@ export default async function AdminDashboardPage() {
         <StatCard
           label="Monthly Revenue"
           value={formatCurrency(stats.monthlyRevenue)}
-          icon={DollarSign}
+          icon="/assets/icons/Icon Container1.svg"
           tone="blue"
           trend={pctChange(stats.monthlyRevenue, stats.monthlyRevenuePrevMonth)}
           sublabel={formatPeriodMonth(currentPeriodMonth())}
@@ -59,7 +61,7 @@ export default async function AdminDashboardPage() {
           label="Outstanding Bills"
           value={String(stats.outstandingCount)}
           sublabel={`${formatCurrency(stats.outstandingAmount)} pending`}
-          icon={Receipt}
+          icon="/assets/icons/Icon Container2.svg"
           tone="red"
           animatedBorder
         />
@@ -67,7 +69,7 @@ export default async function AdminDashboardPage() {
           label="Total Customers"
           value={String(stats.totalCustomers)}
           sublabel={`${formatCurrency(stats.outstandingAmount)} pending`}
-          icon={Users}
+          icon="/assets/icons/Icon Container3.svg"
           tone="blue"
           trend={pctChange(stats.totalCustomers, stats.totalCustomersPrevMonth)}
           animatedBorder
@@ -76,7 +78,7 @@ export default async function AdminDashboardPage() {
           label="Active Customers"
           value={String(stats.activeCustomers)}
           sublabel={`${stats.activeRate.toFixed(1)}% active rate`}
-          icon={UserCheck}
+          icon="/assets/icons/Icon Container4.svg"
           tone="green"
           animatedBorder
         />
@@ -84,7 +86,7 @@ export default async function AdminDashboardPage() {
           label="In Queue — CDR"
           value={stats.lastCdrBatch ? String(stats.lastCdrBatch.matchedRows) : "0"}
           sublabel={stats.lastCdrBatch ? stats.lastCdrBatch.status : "No uploads yet"}
-          icon={UploadCloud}
+          icon="/assets/icons/Icon Container5.svg"
           tone="purple"
           animatedBorder
         />

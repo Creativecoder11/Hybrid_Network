@@ -3,17 +3,40 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Search, Satellite, Wifi, WifiOff, AlertTriangle, Ban, Download } from "lucide-react";
+import {
+  Search,
+  Satellite,
+  Wifi,
+  WifiOff,
+  AlertTriangle,
+  Ban,
+  Download,
+} from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
-import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import {
+  TableContainer,
+  Table,
+  THead,
+  TBody,
+  TR,
+  TH,
+  TD,
+} from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/utils/format";
-import type { TerminalRecord, TerminalStatus, FaultStatus } from "@/lib/terminals/types";
+import type {
+  TerminalRecord,
+  TerminalStatus,
+  FaultStatus,
+} from "@/lib/terminals/types";
 
-const STATUS_TONE: Record<TerminalStatus, "green" | "amber" | "red" | "neutral" | "blue"> = {
+const STATUS_TONE: Record<
+  TerminalStatus,
+  "green" | "amber" | "red" | "neutral" | "blue"
+> = {
   ACTIVE: "green",
   INACTIVE: "neutral",
   DEACTIVATED: "neutral",
@@ -33,7 +56,12 @@ export function TerminalsPageClient({
   q: string;
   status: TerminalStatus | "ALL";
   faultStatus: FaultStatus | "ANY";
-  stats: { total: number; online: number; openFaults: number; suspended: number };
+  stats: {
+    total: number;
+    online: number;
+    openFaults: number;
+    suspended: number;
+  };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -65,10 +93,10 @@ export function TerminalsPageClient({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Terminals</h1>
-          <p className="text-sm text-text-muted">
-            Live fleet inventory, health, and remote management. Currently backed by mock data —
-            wire in the supplier API to make this live.
+          <p className="text-2xl font-bold ">Terminals</p>
+          <p className="text-sm">
+            Live fleet inventory, health, and remote management. Currently
+            backed by mock data — wire in the supplier API to make this live.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -86,10 +114,34 @@ export function TerminalsPageClient({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Terminals" value={String(stats.total)} icon={Satellite} tone="blue" />
-        <StatCard label="Online Now" value={String(stats.online)} icon={Wifi} tone="green" />
-        <StatCard label="Open Faults" value={String(stats.openFaults)} icon={AlertTriangle} tone="red" />
-        <StatCard label="Suspended" value={String(stats.suspended)} icon={Ban} tone="amber" />
+        <StatCard
+          label="Total Terminals"
+          value={String(stats.total)}
+          icon="/assets/icons/Icon Container2.svg"
+          animatedBorder
+          tone="blue"
+        />
+        <StatCard
+          label="Online Now"
+          value={String(stats.online)}
+          icon="/assets/icons/Icon Container2.svg"
+          animatedBorder
+          tone="green"
+        />
+        <StatCard
+          label="Open Faults"
+          value={String(stats.openFaults)}
+          icon="/assets/icons/Icon Container2.svg"
+          tone="red"
+          animatedBorder
+        />
+        <StatCard
+          label="Suspended"
+          value={String(stats.suspended)}
+          icon="/assets/icons/Icon Container2.svg"
+          tone="amber"
+          animatedBorder
+        />
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -101,25 +153,41 @@ export function TerminalsPageClient({
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
-        <Select value={status} onChange={(e) => updateParams({ status: e.target.value })} className="sm:w-52">
-          <option value="ALL">All statuses</option>
-          <option value="ACTIVE">Active</option>
-          <option value="SUSPENDED">Suspended</option>
-          <option value="PENDING_ACTIVATION">Pending Activation</option>
-          <option value="INACTIVE">Inactive</option>
-          <option value="DEACTIVATED">Deactivated</option>
-          <option value="CANCELLED">Cancelled</option>
-        </Select>
-        <Select value={faultStatus} onChange={(e) => updateParams({ faultStatus: e.target.value })} className="sm:w-44">
-          <option value="ANY">Any fault status</option>
-          <option value="OPEN">Open faults</option>
-          <option value="ACKNOWLEDGED">Acknowledged</option>
-          <option value="CLEARED">Cleared only</option>
-        </Select>
+        <div>
+          <Select
+            value={status}
+            onChange={(e) => updateParams({ status: e.target.value })}
+            className="sm:w-52"
+          >
+            <option value="ALL">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Suspended</option>
+            <option value="PENDING_ACTIVATION">Pending Activation</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="DEACTIVATED">Deactivated</option>
+            <option value="CANCELLED">Cancelled</option>
+          </Select>
+        </div>
+        <div>
+          <Select
+            value={faultStatus}
+            onChange={(e) => updateParams({ faultStatus: e.target.value })}
+            className="sm:w-44"
+          >
+            <option value="ANY">Any fault status</option>
+            <option value="OPEN">Open faults</option>
+            <option value="ACKNOWLEDGED">Acknowledged</option>
+            <option value="CLEARED">Cleared only</option>
+          </Select>
+        </div>
       </div>
 
       {terminals.length === 0 ? (
-        <EmptyState icon={Satellite} title="No terminals found" description="Try adjusting your search or filters." />
+        <EmptyState
+          icon={Satellite}
+          title="No terminals found"
+          description="Try adjusting your search or filters."
+        />
       ) : (
         <TableContainer>
           <Table>
@@ -137,17 +205,29 @@ export function TerminalsPageClient({
             </THead>
             <TBody>
               {terminals.map((t) => {
-                const openFaults = t.faults.filter((f) => f.status === "OPEN").length;
+                const openFaults = t.faults.filter(
+                  (f) => f.status === "OPEN",
+                ).length;
                 return (
                   <TR key={t.id}>
                     <TD>
-                      <p className="font-medium text-text-primary">{t.identification.serialNumber}</p>
-                      <p className="font-mono text-xs text-accent-green">{t.identification.iccid}</p>
+                      <p className="font-medium text-text-primary">
+                        {t.identification.serialNumber}
+                      </p>
+                      <p className="font-mono text-xs text-accent-green">
+                        {t.identification.iccid}
+                      </p>
                     </TD>
-                    <TD>{t.activation.assignedCustomerName ?? <span className="text-text-muted">Unassigned</span>}</TD>
+                    <TD>
+                      {t.activation.assignedCustomerName ?? (
+                        <span className="text-text-muted">Unassigned</span>
+                      )}
+                    </TD>
                     <TD>{t.product.model}</TD>
                     <TD>
-                      <Badge tone={STATUS_TONE[t.status]}>{t.status.replace(/_/g, " ")}</Badge>
+                      <Badge tone={STATUS_TONE[t.status]}>
+                        {t.status.replace(/_/g, " ")}
+                      </Badge>
                     </TD>
                     <TD>
                       <div className="flex items-center gap-1.5">
@@ -156,10 +236,16 @@ export function TerminalsPageClient({
                         ) : (
                           <WifiOff className="size-3.5 text-text-muted" />
                         )}
-                        <span className="text-xs">{t.live.onlineStatus === "ONLINE" ? `${t.live.signalStrengthDbm} dBm` : "Offline"}</span>
+                        <span className="text-xs">
+                          {t.live.onlineStatus === "ONLINE"
+                            ? `${t.live.signalStrengthDbm} dBm`
+                            : "Offline"}
+                        </span>
                       </div>
                     </TD>
-                    <TD className="text-text-secondary">{formatDateTime(t.live.lastSeenAt)}</TD>
+                    <TD className="text-text-secondary">
+                      {formatDateTime(t.live.lastSeenAt)}
+                    </TD>
                     <TD>
                       {openFaults > 0 ? (
                         <Badge tone="red">{openFaults} open</Badge>
@@ -168,7 +254,10 @@ export function TerminalsPageClient({
                       )}
                     </TD>
                     <TD>
-                      <Link href={`/admin/terminals/${t.id}`} className="text-xs font-medium text-accent-blue hover:underline">
+                      <Link
+                        href={`/admin/terminals/${t.id}`}
+                        className="text-xs font-medium text-accent-blue hover:underline"
+                      >
                         View
                       </Link>
                     </TD>

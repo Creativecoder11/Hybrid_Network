@@ -39,7 +39,7 @@ const CdrRecordSchema = new Schema(
     consumptionMin: { type: Number, default: 0 },
     consumptionMsg: { type: Number, default: 0 },
 
-    priceCurrency: { type: String, default: "MYR" },
+    priceCurrency: { type: String, default: "USD" },
     priceTotal: { type: Number, default: 0 },
     priceInBundle: { type: Number, default: 0 },
     priceInvoiced: { type: Number, default: 0 },

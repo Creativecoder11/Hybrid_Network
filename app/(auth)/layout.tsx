@@ -21,18 +21,16 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           />
         </div>
 
-        <div className="relative z-10 max-w-md space-y-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-accent-green">
-            ISP Distributor Portal
-          </p>
-          <h1 className="mt-4 text-4xl font-extrabold leading-tight text-text-primary">
-            Run your network&apos;s billing like clockwork.
+        <div className="relative max-w-xl z-10">
+          
+          <h1 className="mt-4 text-6xl font-extrabold leading-tight text-text-primary">
+            Run your network's <br/>billing like clockwork.
           </h1>
-          <p className="mt-4 text-sm leading-relaxed text-text-secondary">
+          <p className="mt-4 text-lg leading-relaxed">
             Track usage, generate invoices, and manage every customer across
             Starlink, Fiber, and VSAT connections from a single dashboard.
           </p>
-          <p className="relative z-10 text-xs text-text-muted">
+          <p className="mt-20 relative z-10 text-xs text-text-muted">
             &copy; {new Date().getFullYear()} Hybrid Networks. All rights
             reserved.
           </p>

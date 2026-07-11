@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Switch } from "@/components/ui/Switch";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlanFormModal } from "@/components/admin/PlanFormModal";
+import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { togglePlanActiveAction, deletePlanAction } from "@/lib/actions/plans";
 import { formatCurrency, formatNumber } from "@/lib/utils/format";
 import type { PlanFull } from "@/lib/types/plan";
@@ -19,6 +20,7 @@ export function PlansPageClient({ plans, canDelete }: { plans: PlanFull[]; canDe
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<PlanFull | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PlanFull | null>(null);
 
   async function handleToggle(plan: PlanFull) {
     setBusyId(plan.id);
@@ -31,14 +33,15 @@ export function PlansPageClient({ plans, canDelete }: { plans: PlanFull[]; canDe
     }
   }
 
-  async function handleDelete(plan: PlanFull) {
-    if (!confirm(`Delete "${plan.name}"? This cannot be undone.`)) return;
-    setBusyId(plan.id);
-    const result = await deletePlanAction(plan.id);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setBusyId(deleteTarget.id);
+    const result = await deletePlanAction(deleteTarget.id);
     setBusyId(null);
     if (result?.error) toast.error(result.error);
     else {
       toast.success(result?.success ?? "Deleted.");
+      setDeleteTarget(null);
       router.refresh();
     }
   }
@@ -47,8 +50,8 @@ export function PlansPageClient({ plans, canDelete }: { plans: PlanFull[]; canDe
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Service Plans</h1>
-          <p className="text-sm text-text-muted">Manage pricing, allowances, and availability.</p>
+          <p className="text-2xl font-bold text-text-primary">Service Plans</p>
+          <p className="text-sm ">Manage pricing, allowances, and availability.</p>
         </div>
         <Button
           onClick={() => {
@@ -76,7 +79,7 @@ export function PlansPageClient({ plans, canDelete }: { plans: PlanFull[]; canDe
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => (
-            <Card key={plan.id} className="flex flex-col">
+            <Card key={plan.id} className="flex animated-border-card flex-col">
               <CardContent className="flex flex-1 flex-col pt-5">
                 <div className="flex items-start justify-between">
                   <div>
@@ -126,7 +129,7 @@ export function PlansPageClient({ plans, canDelete }: { plans: PlanFull[]; canDe
                     </button>
                     {canDelete && (
                       <button
-                        onClick={() => handleDelete(plan)}
+                        onClick={() => setDeleteTarget(plan)}
                         disabled={busyId === plan.id}
                         className="rounded-lg p-1.5 text-text-muted hover:bg-red/10 hover:text-red disabled:opacity-50"
                         aria-label="Delete"
@@ -152,6 +155,15 @@ export function PlansPageClient({ plans, canDelete }: { plans: PlanFull[]; canDe
           }}
         />
       )}
+
+      <DeleteConfirmModal
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.name ?? "this plan"}"?`}
+        description="This plan will be permanently deleted and cannot be recovered."
+        loading={!!deleteTarget && busyId === deleteTarget.id}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

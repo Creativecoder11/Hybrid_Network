@@ -74,7 +74,7 @@ export function PlanFormModal({ plan, onClose }: { plan: PlanFull | null; onClos
             <Input name="monthlyPrice" type="number" step="0.01" defaultValue={plan?.monthlyPrice} required />
           </Field>
           <Field label="Currency">
-            <Input name="currency" defaultValue={plan?.currency ?? "MYR"} />
+            <Input name="currency" defaultValue={plan?.currency ?? "USD"} />
           </Field>
           <Field label="Data Allowance (GB)">
             <Input

@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Label } from "@/components/ui/Label";
 import { Button } from "@/components/ui/Button";
@@ -39,6 +40,15 @@ export function NewTicketModal({ onClose }: { onClose: () => void }) {
         <div>
           <Label required>Subject</Label>
           <Input name="subject" required minLength={3} placeholder="Brief summary of your issue" />
+        </div>
+        <div>
+          <Label required>Category</Label>
+          <Select name="category" defaultValue="GENERAL">
+            <option value="GENERAL">General</option>
+            <option value="BILLING">Billing</option>
+            <option value="TECHNICAL">Technical</option>
+            <option value="SERVICE">Service</option>
+          </Select>
         </div>
         <div>
           <Label required>Message</Label>

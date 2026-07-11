@@ -7,7 +7,7 @@ const SettingsSchema = new Schema(
     companyAddress: { type: String, default: "" },
     companyEmail: { type: String, default: "" },
     companyPhone: { type: String, default: "" },
-    currency: { type: String, default: "MYR" },
+    currency: { type: String, default: "USD" },
     taxLabel: { type: String, default: "GST" },
     taxRate: { type: Number, default: 6 },
     invoicePrefix: { type: String, default: "HINV" },

@@ -42,7 +42,8 @@ export function Pagination({
           Showing {from} to {to} of {total} results
         </span>
         {onPageSizeChange && (
-          <Select
+          <div>
+            <Select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             className="h-8 w-auto py-0 text-xs"
@@ -53,6 +54,7 @@ export function Pagination({
               </option>
             ))}
           </Select>
+          </div>
         )}
       </div>
       <div className="flex items-center gap-1">

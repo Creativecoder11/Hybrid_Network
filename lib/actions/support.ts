@@ -6,7 +6,12 @@ import { SupportTicket } from "@/models/SupportTicket";
 import { ActivityLog } from "@/models/ActivityLog";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateTicketNumber } from "@/lib/utils/ids";
-import { createTicketSchema, replyTicketSchema, updateTicketStatusSchema } from "@/lib/validations/ticket";
+import {
+  createTicketSchema,
+  replyTicketSchema,
+  updateTicketStatusSchema,
+  assignTicketSchema,
+} from "@/lib/validations/ticket";
 import type { ActionState } from "@/lib/actions/customers";
 
 function str(formData: FormData, key: string): string {
@@ -23,6 +28,7 @@ export async function createTicketAction(
   const parsed = createTicketSchema.safeParse({
     subject: str(formData, "subject"),
     message: str(formData, "message"),
+    category: str(formData, "category") || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
@@ -36,6 +42,7 @@ export async function createTicketAction(
     customer: user.id,
     subject: parsed.data.subject,
     message: parsed.data.message,
+    category: parsed.data.category,
     status: "OPEN",
   });
 
@@ -106,7 +113,11 @@ export async function updateTicketStatusAction(
   if (!parsed.success) return { error: "Invalid status." };
 
   await connectDB();
-  const ticket = await SupportTicket.findByIdAndUpdate(ticketId, { status }, { new: true });
+  const ticket = await SupportTicket.findByIdAndUpdate(
+    ticketId,
+    { status, resolvedAt: status === "RESOLVED" ? new Date() : null },
+    { new: true }
+  );
   if (!ticket) return { error: "Ticket not found." };
 
   await ActivityLog.create({
@@ -119,4 +130,34 @@ export async function updateTicketStatusAction(
   revalidatePath(`/admin/support/${ticketId}`);
   revalidatePath("/admin/support");
   return { success: "Status updated." };
+}
+
+export async function assignTicketAction(
+  ticketId: string,
+  assignedTo: string | null
+): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  const parsed = assignTicketSchema.safeParse({ ticketId, assignedTo });
+  if (!parsed.success) return { error: "Invalid assignment." };
+
+  await connectDB();
+  const ticket = await SupportTicket.findByIdAndUpdate(
+    ticketId,
+    { assignedTo: parsed.data.assignedTo || null },
+    { new: true }
+  );
+  if (!ticket) return { error: "Ticket not found." };
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: ticket.customer,
+    action: "TICKET_ASSIGNED",
+    meta: { ticketNumber: ticket.ticketNumber, assignedTo: parsed.data.assignedTo || "unassigned" },
+  });
+
+  revalidatePath(`/admin/support/${ticketId}`);
+  revalidatePath("/admin/support");
+  return { success: "Ticket assigned." };
 }

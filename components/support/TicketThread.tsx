@@ -47,7 +47,7 @@ export function TicketThread({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-text-primary">{ticket.subject}</h1>
+            <p className="text-lg font-bold text-text-primary">{ticket.subject}</p>
             <Badge tone={STATUS_TONE[ticket.status]}>{ticket.status.replace("_", " ")}</Badge>
           </div>
           <p className="text-xs text-text-muted">

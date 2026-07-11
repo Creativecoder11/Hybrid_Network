@@ -61,8 +61,8 @@ export function SettingsPageClient({
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">Settings</h1>
-        <p className="text-sm text-text-muted">Company profile, billing defaults, and email delivery.</p>
+        <p className="text-2xl font-bold text-text-primary">Settings</p>
+        <p className="text-sm">Company profile, billing defaults, and email delivery.</p>
       </div>
 
       <form action={formAction}>

@@ -15,10 +15,14 @@ export async function buildInvoicePdfData(invoiceId: string): Promise<InvoicePdf
   const invoice = await Invoice.findById(invoiceId);
   if (!invoice) return null;
 
-  const [customer, settings, usage] = await Promise.all([
+  const [customer, settings, usage, lastInvoices] = await Promise.all([
     User.findById(invoice.customer),
     Settings.findOne({ key: "GLOBAL" }),
     UsageRecord.findOne({ customer: invoice.customer, periodMonth: invoice.periodMonth }),
+    Invoice.find({ customer: invoice.customer, _id: { $ne: invoice._id } })
+      .sort({ issueDate: -1 })
+      .limit(3)
+      .lean(),
   ]);
   if (!customer) return null;
 
@@ -52,7 +56,7 @@ export async function buildInvoicePdfData(invoiceId: string): Promise<InvoicePdf
     taxRate: invoice.taxRate,
     taxAmount: invoice.taxAmount,
     total: invoice.total,
-    currency: invoice.currency ?? "MYR",
+    currency: invoice.currency ?? "USD",
     usageSummary: usage
       ? {
           dataGB: Math.round(((usage.volumeDataBytes ?? 0) / GB) * 100) / 100,
@@ -62,5 +66,8 @@ export async function buildInvoicePdfData(invoiceId: string): Promise<InvoicePdf
       : null,
     paymentMethod: invoice.paymentMethod || undefined,
     paidDate: invoice.paidDate ? formatDate(invoice.paidDate) : null,
+    lastInvoices: lastInvoices
+      .reverse()
+      .map((inv) => ({ periodMonth: inv.periodMonth, total: inv.total })),
   };
 }

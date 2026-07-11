@@ -7,7 +7,7 @@ export const servicePlanSchema = z.object({
   provider: z.enum(PLAN_PROVIDERS),
   planType: z.enum(PLAN_TYPES).default("DATA"),
   monthlyPrice: z.coerce.number().min(0),
-  currency: z.string().default("MYR"),
+  currency: z.string().default("USD"),
   dataAllowanceGB: z.coerce.number().min(0).nullable().optional(),
   voiceMinutes: z.coerce.number().min(0).nullable().optional(),
   smsCount: z.coerce.number().min(0).nullable().optional(),

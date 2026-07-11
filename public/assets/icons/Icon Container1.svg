@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="32" height="32" rx="8" fill="url(#paint0_linear_2012_310)"/>
+<path d="M10.332 14.6693C10.332 12.1551 10.332 10.898 11.1619 10.117C11.9918 9.33594 13.3274 9.33594 15.9987 9.33594H16.5138C18.688 9.33594 19.7751 9.33594 20.53 9.86783C20.7463 10.0202 20.9383 10.201 21.1002 10.4045C21.6654 11.1151 21.6654 12.1382 21.6654 14.1844V15.8814C21.6654 17.8568 21.6654 18.8446 21.3527 19.6334C20.8502 20.9017 19.7873 21.902 18.4398 22.375C17.6016 22.6693 16.5522 22.6693 14.4532 22.6693C13.2539 22.6693 12.6542 22.6693 12.1752 22.5011C11.4052 22.2308 10.7979 21.6592 10.5107 20.9345C10.332 20.4837 10.332 19.9193 10.332 18.7905V14.6693Z" stroke="white" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M21.6667 16C21.6667 17.2273 20.6717 18.2222 19.4444 18.2222C19.0006 18.2222 18.4773 18.1444 18.0458 18.2601C17.6623 18.3628 17.3628 18.6623 17.2601 19.0458C17.1444 19.4773 17.2222 20.0006 17.2222 20.4444C17.2222 21.6717 16.2273 22.6667 15 22.6667" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.332 12.6641H17.9987" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.332 15.3359H15.332" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<defs>
+<linearGradient id="paint0_linear_2012_310" x1="-14.5778" y1="16" x2="32" y2="16" gradientUnits="userSpaceOnUse">
+<stop stop-color="#00CF90"/>
+<stop offset="1" stop-color="#016FBF"/>
+</linearGradient>
+</defs>
+</svg>

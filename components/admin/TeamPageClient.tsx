@@ -55,8 +55,8 @@ export function TeamPageClient({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Team</h1>
-          <p className="text-sm text-text-muted">Manage admin and sub-admin accounts.</p>
+          <p className="text-2xl font-bold text-text-primary">Team</p>
+          <p className="text-sm">Manage admin and sub-admin accounts.</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="size-4" />

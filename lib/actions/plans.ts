@@ -27,7 +27,7 @@ export async function savePlanAction(
     provider: str(formData, "provider"),
     planType: str(formData, "planType") || "DATA",
     monthlyPrice: str(formData, "monthlyPrice"),
-    currency: str(formData, "currency") || "MYR",
+    currency: str(formData, "currency") || "USD",
     dataAllowanceGB: str(formData, "dataAllowanceGB") || null,
     voiceMinutes: str(formData, "voiceMinutes") || null,
     smsCount: str(formData, "smsCount") || null,

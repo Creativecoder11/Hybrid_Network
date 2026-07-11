@@ -22,6 +22,7 @@ import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CustomerFormModal } from "@/components/admin/CustomerFormModal";
 import { UsageHistoryEditModal } from "@/components/admin/UsageHistoryEditModal";
+import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import {
   deleteCustomerAction,
   resendInviteAction,
@@ -106,6 +107,7 @@ export function CustomerDetailClient({
   const [editOpen, setEditOpen] = useState(false);
   const [editingUsage, setEditingUsage] = useState<UsageHistoryRow | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   async function runAction(name: string, fn: () => Promise<{ error?: string; success?: string } | undefined>) {
     setPendingAction(name);
@@ -119,7 +121,6 @@ export function CustomerDetailClient({
   }
 
   async function handleDelete() {
-    if (!confirm(`Delete ${customer.name}? This cannot be undone.`)) return;
     setPendingAction("delete");
     const result = await deleteCustomerAction(customer.id);
     setPendingAction(null);
@@ -480,7 +481,7 @@ export function CustomerDetailClient({
                     label="Delete Customer"
                     tone="red"
                     pending={pendingAction === "delete"}
-                    onClick={handleDelete}
+                    onClick={() => setDeleteOpen(true)}
                   />
                 )}
               </div>
@@ -505,6 +506,15 @@ export function CustomerDetailClient({
           }}
         />
       )}
+
+      <DeleteConfirmModal
+        open={deleteOpen}
+        title={`Delete ${customer.name}?`}
+        description="This customer and their account details will be permanently deleted and cannot be recovered."
+        loading={pendingAction === "delete"}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

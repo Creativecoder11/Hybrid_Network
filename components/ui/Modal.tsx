@@ -47,14 +47,14 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       />
       <div
         className={cn(
-          "relative z-10 w-full rounded-2xl border border-line bg-surface shadow-2xl shadow-black/40",
+          "relative z-10 w-full rounded-2xl border animated-border-card border-line bg-surface shadow-2xl shadow-black/40",
           sizeClasses[size]
         )}
       >
         {(title || description) && (
           <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
             <div>
-              {title && <h2 className="text-base font-semibold text-text-primary">{title}</h2>}
+              {title && <p className="text-base font-semibold text-text-primary">{title}</p>}
               {description && <p className="mt-1 text-xs text-text-muted">{description}</p>}
             </div>
             <button

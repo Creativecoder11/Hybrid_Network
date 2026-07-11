@@ -34,7 +34,7 @@ export default async function PortalBillsPage({
     issueDate: (inv.issueDate as Date).toISOString(),
     dueDate: (inv.dueDate as Date).toISOString(),
     total: inv.total,
-    currency: inv.currency ?? "MYR",
+    currency: inv.currency ?? "USD",
     status: inv.status,
   }));
 

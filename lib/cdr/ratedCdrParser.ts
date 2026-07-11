@@ -126,7 +126,7 @@ export function parseRatedCdrSheet(sheet: XLSX.WorkSheet): ParseResult {
         consumptionMin: num(row[COLUMN_INDEX.consumptionMin]),
         consumptionMsg: num(row[COLUMN_INDEX.consumptionMsg]),
 
-        priceCurrency: str(row[COLUMN_INDEX.priceCurrency]) || "MYR",
+        priceCurrency: str(row[COLUMN_INDEX.priceCurrency]) || "USD",
         priceTotal: num(row[COLUMN_INDEX.priceTotal]),
         priceInBundle: num(row[COLUMN_INDEX.priceInBundle]),
         priceInvoiced: num(row[COLUMN_INDEX.priceInvoiced]),

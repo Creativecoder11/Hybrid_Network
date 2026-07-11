@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import Image from "next/image";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Card } from "@/components/ui/Card";
@@ -7,7 +7,7 @@ export function StatCard({
   label,
   value,
   sublabel,
-  icon: Icon,
+  icon,
   trend,
   tone = "neutral",
   animatedBorder = false,
@@ -15,7 +15,7 @@ export function StatCard({
   label: string;
   value: string;
   sublabel?: string;
-  icon?: LucideIcon;
+  icon?:string;
   trend?: { value: string; positive: boolean };
   tone?: "green" | "blue" | "amber" | "red" | "purple" | "neutral";
   animatedBorder?: boolean;
@@ -33,9 +33,9 @@ export function StatCard({
     <Card className={cn("", animatedBorder && "border-transparent")}>
       <div className="flex px-5 pt-5 items-start justify-between">
         <p className="text-sm font-medium">{label}</p>
-        {Icon && (
+        {icon && (
           <span className={cn("flex size-8 items-center justify-center rounded-lg", iconToneClasses[tone])}>
-            <Icon className="size-4" />
+            <Image src={icon} alt={label} width={32} height={32} />
           </span>
         )}
       </div>

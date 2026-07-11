@@ -131,7 +131,7 @@ export function parseGenericSheet(sheet: XLSX.WorkSheet): ParseResult {
       consumptionMin: num(get(row, "consumptionMin")),
       consumptionMsg: num(get(row, "consumptionMsg")),
 
-      priceCurrency: str(get(row, "priceCurrency")) || "MYR",
+      priceCurrency: str(get(row, "priceCurrency")) || "USD",
       priceTotal: num(get(row, "priceTotal")),
       priceInBundle: num(get(row, "priceInBundle")),
       priceInvoiced: num(get(row, "priceInvoiced")),

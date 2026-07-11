@@ -36,7 +36,7 @@ const InvoiceSchema = new Schema(
     taxLabel: { type: String, default: "GST" },
     taxAmount: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
-    currency: { type: String, default: "MYR" },
+    currency: { type: String, default: "USD" },
 
     status: { type: String, enum: INVOICE_STATUSES, default: "DRAFT" },
     paidDate: { type: Date, default: null },

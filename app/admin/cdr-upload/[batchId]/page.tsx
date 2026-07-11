@@ -58,7 +58,7 @@ export default async function CdrBatchDetailPage({
     volumeDataGB: toGB(r.volumeDataBytes),
     volumeTotalGB: toGB(r.volumeTotalBytes),
     priceTotal: r.priceTotal ?? 0,
-    currency: r.priceCurrency ?? "MYR",
+    currency: r.priceCurrency ?? "USD",
   }));
 
   const customerOptions = customers.map((c) => ({

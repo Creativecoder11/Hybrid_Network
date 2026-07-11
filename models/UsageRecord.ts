@@ -21,7 +21,7 @@ const UsageRecordSchema = new Schema(
     consumptionMin: { type: Number, default: 0 },
     consumptionMsg: { type: Number, default: 0 },
 
-    currency: { type: String, default: "MYR" },
+    currency: { type: String, default: "USD" },
     cdrPriceTotal: { type: Number, default: 0 },
     cdrPriceInvoiced: { type: Number, default: 0 },
 

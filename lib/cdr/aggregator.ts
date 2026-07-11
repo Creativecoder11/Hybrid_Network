@@ -34,7 +34,7 @@ function emptyTotals(): PeriodTotals {
     consumptionMsg: 0,
     cdrPriceTotal: 0,
     cdrPriceInvoiced: 0,
-    currency: "MYR",
+    currency: "USD",
   };
 }
 

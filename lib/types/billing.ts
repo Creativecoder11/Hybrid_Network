@@ -4,6 +4,10 @@ export type InvoiceListRow = {
   customerId: string;
   customerName: string;
   customerCode: string;
+  cardName: string;
+  vendor: string;
+  planName: string;
+  usageGB: number;
   periodMonth: string;
   issueDate: string;
   dueDate: string;
@@ -27,5 +31,25 @@ export type InvoiceDetail = InvoiceListRow & {
 export type BillableCustomerOption = {
   id: string;
   label: string;
+  customerCode: string;
+  customerSince: string;
   planId: string;
+  planName: string;
+  planProvider: string;
+  planSpecLabel: string;
+  planMonthlyPrice: number;
+  planCurrency: string;
+};
+
+export type BillingStats = {
+  billedThisCycle: number;
+  billedTrendPct: number;
+  collected: number;
+  collectionRate: number;
+  pendingReviewAmount: number;
+  pendingReviewCount: number;
+  overdueAmount: number;
+  overdueCount: number;
+  cycleLabel: string;
+  cycleDaysLeft: number;
 };

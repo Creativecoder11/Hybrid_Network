@@ -12,7 +12,7 @@ const ServicePlanSchema = new Schema(
     provider: { type: String, enum: PLAN_PROVIDERS, required: true },
     planType: { type: String, enum: PLAN_TYPES, default: "DATA" },
     monthlyPrice: { type: Number, required: true, default: 0 },
-    currency: { type: String, default: "MYR" },
+    currency: { type: String, default: "USD" },
     dataAllowanceGB: { type: Number, default: null },
     voiceMinutes: { type: Number, default: null },
     smsCount: { type: Number, default: null },

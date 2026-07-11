@@ -34,7 +34,7 @@ export default async function PortalOverviewPage() {
         issueDate: outstandingInvoice.issueDate.toISOString(),
         dueDate: outstandingInvoice.dueDate.toISOString(),
         total: outstandingInvoice.total,
-        currency: outstandingInvoice.currency ?? "MYR",
+        currency: outstandingInvoice.currency ?? "USD",
         status: outstandingInvoice.status,
       }
     : null;
@@ -46,7 +46,7 @@ export default async function PortalOverviewPage() {
     issueDate: (inv.issueDate as Date).toISOString(),
     dueDate: (inv.dueDate as Date).toISOString(),
     total: inv.total,
-    currency: inv.currency ?? "MYR",
+    currency: inv.currency ?? "USD",
     status: inv.status,
   }));
 
