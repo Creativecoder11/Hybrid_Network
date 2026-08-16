@@ -25,3 +25,12 @@ export const markPaidSchema = z.object({
   paidDate: z.string().min(1),
 });
 export type MarkPaidInput = z.infer<typeof markPaidSchema>;
+
+export const updateInvoiceSchema = z.object({
+  invoiceId: z.string().min(1),
+  periodMonth: z.string().regex(/^\d{6}$/, "Format must be YYYYMM"),
+  dueDate: z.string().min(1),
+  amount: z.coerce.number().min(0),
+  status: z.enum(["DRAFT", "SENT", "DUE", "OVERDUE", "PAID", "CANCELLED"]),
+});
+export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;

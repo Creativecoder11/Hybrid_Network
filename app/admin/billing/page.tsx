@@ -4,10 +4,12 @@ import { Invoice } from "@/models/Invoice";
 import { User } from "@/models/User";
 import { Subscription } from "@/models/Subscription";
 import { UsageRecord } from "@/models/UsageRecord";
+import { getCurrentUser } from "@/lib/auth/dal";
 import { syncOverdueStatuses } from "@/lib/billing/statusSync";
 import { getBillingStats, buildPlanSpecLabel } from "@/lib/billing/billingStats";
 import { BillingPageClient } from "@/components/admin/BillingPageClient";
-import type { BillableCustomerOption, InvoiceListRow } from "@/lib/types/billing";
+import { BillingSubNav } from "@/components/admin/BillingSubNav";
+import type { BillableCustomerOption, InvoiceListRow, TrashedInvoiceRow } from "@/lib/types/billing";
 
 const GB = 1_000_000_000;
 
@@ -29,6 +31,32 @@ export default async function BillingPage({
 
   await syncOverdueStatuses();
   await connectDB();
+
+  const currentUser = await getCurrentUser();
+  const canDelete = currentUser?.role === "SUPER_ADMIN";
+  const trashMode = sp.trash === "1" && canDelete;
+
+  const trashInvoices = trashMode
+    ? await Invoice.find({ deletedAt: { $ne: null } })
+        .sort({ deletedAt: -1 })
+        .limit(200)
+        .populate("customer")
+        .lean()
+    : [];
+
+  const trashRows: TrashedInvoiceRow[] = trashInvoices.map((inv) => {
+    const customer = inv.customer as unknown as { name?: string; customerCode?: string } | null;
+    return {
+      id: inv._id.toString(),
+      invoiceNumber: inv.invoiceNumber,
+      customerName: customer?.name ?? "Unknown",
+      customerCode: customer?.customerCode ?? "",
+      total: inv.total,
+      currency: inv.currency ?? "USD",
+      status: inv.status,
+      deletedAt: (inv.deletedAt as Date).toISOString(),
+    };
+  });
 
   const filter: Record<string, unknown> = {};
   if (status !== "ALL") filter.status = status;
@@ -91,6 +119,7 @@ export default async function BillingPage({
       periodMonth: inv.periodMonth,
       issueDate: (inv.issueDate as Date).toISOString(),
       dueDate: (inv.dueDate as Date).toISOString(),
+      subtotal: inv.subtotal,
       total: inv.total,
       currency: inv.currency ?? "USD",
       status: inv.status,
@@ -136,16 +165,22 @@ export default async function BillingPage({
     });
 
   return (
-    <BillingPageClient
-      rows={rows}
-      status={status}
-      customerId={customerId}
-      period={period}
-      q={q}
-      sort={sort}
-      stats={stats}
-      customerOptions={customerOptions}
-      allCustomers={customers.map((c) => ({ id: c._id.toString(), label: c.name }))}
-    />
+    <div className="space-y-6">
+      <BillingSubNav />
+      <BillingPageClient
+        rows={rows}
+        status={status}
+        customerId={customerId}
+        period={period}
+        q={q}
+        sort={sort}
+        stats={stats}
+        customerOptions={customerOptions}
+        allCustomers={customers.map((c) => ({ id: c._id.toString(), label: c.name }))}
+        canDelete={canDelete}
+        trashMode={trashMode}
+        trashRows={trashRows}
+      />
+    </div>
   );
 }

@@ -17,6 +17,17 @@ const LineItemSchema = new Schema(
     unit: { type: String, default: "" },
     unitPrice: { type: Number, default: 0 },
     amount: { type: Number, default: 0 },
+
+    // Populated only for line items generated from a priced CDR charge
+    // record — preserved here (rather than just referenced) so the invoice
+    // stays a correct audit trail even if the source Retail Plan changes later.
+    cdrChargeRecord: { type: Schema.Types.ObjectId, ref: "CdrChargeRecord", default: null },
+    cdrIdentifier: { type: String, default: "" },
+    wholesaleAmount: { type: Number, default: null },
+    retailPlanName: { type: String, default: "" },
+    pricingMethod: { type: String, default: "" },
+    markupPercent: { type: Number, default: null },
+    fixedPrice: { type: Number, default: null },
   },
   { _id: false }
 );
@@ -44,12 +55,43 @@ const InvoiceSchema = new Schema(
     sentAt: { type: Date, default: null },
     pdfGeneratedAt: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
 InvoiceSchema.index({ customer: 1, status: 1 });
 InvoiceSchema.index({ dueDate: 1 });
+InvoiceSchema.index({ deletedAt: 1 });
+
+// Soft-delete safety net: every find/count/aggregate query on Invoice
+// transparently excludes trashed invoices unless it explicitly filters on
+// deletedAt itself (as the Trash view's queries do). This means callers
+// elsewhere in the app don't each need to remember to exclude deleted rows.
+// Mongoose 9's pre-hooks are plain return/promise based (no `next` callback).
+function excludeDeletedQuery(this: mongoose.Query<unknown, unknown>) {
+  const filter = this.getFilter();
+  if (filter.deletedAt === undefined) {
+    this.where({ deletedAt: null });
+  }
+}
+
+InvoiceSchema.pre("find", excludeDeletedQuery);
+InvoiceSchema.pre("findOne", excludeDeletedQuery);
+InvoiceSchema.pre("findOneAndUpdate", excludeDeletedQuery);
+InvoiceSchema.pre("countDocuments", excludeDeletedQuery);
+
+InvoiceSchema.pre("aggregate", function (this: mongoose.Aggregate<unknown>) {
+  const pipeline = this.pipeline();
+  const hasDeletedMatch = pipeline.some(
+    (stage): stage is { $match: Record<string, unknown> } =>
+      typeof stage === "object" && stage !== null && "$match" in stage &&
+      Object.prototype.hasOwnProperty.call((stage as { $match: Record<string, unknown> }).$match, "deletedAt")
+  );
+  if (!hasDeletedMatch) {
+    pipeline.unshift({ $match: { deletedAt: null } });
+  }
+});
 
 export type InvoiceDoc = InferSchemaType<typeof InvoiceSchema>;
 

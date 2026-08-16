@@ -11,21 +11,48 @@ export type InvoiceListRow = {
   periodMonth: string;
   issueDate: string;
   dueDate: string;
+  subtotal: number;
   total: number;
   currency: string;
   status: "DRAFT" | "SENT" | "DUE" | "OVERDUE" | "PAID" | "CANCELLED";
 };
 
+export type InvoiceLineItemDetail = {
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  amount: number;
+  // Present only on line items generated from a priced CDR charge record —
+  // admin-only audit trail, never shown on customer-facing views/PDF.
+  cdrIdentifier?: string;
+  wholesaleAmount?: number | null;
+  retailPlanName?: string;
+  pricingMethod?: string;
+  markupPercent?: number | null;
+  fixedPrice?: number | null;
+};
+
 export type InvoiceDetail = InvoiceListRow & {
   customerEmail: string;
-  lineItems: { description: string; quantity: number; unit: string; unitPrice: number; amount: number }[];
-  subtotal: number;
+  lineItems: InvoiceLineItemDetail[];
   taxLabel: string;
   taxRate: number;
   taxAmount: number;
   paidDate: string | null;
   paymentMethod: string;
   sentAt: string | null;
+};
+
+export type TrashedInvoiceRow = {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerCode: string;
+  total: number;
+  currency: string;
+  status: InvoiceListRow["status"];
+  deletedAt: string;
 };
 
 export type BillableCustomerOption = {

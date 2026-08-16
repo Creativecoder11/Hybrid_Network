@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "verify:retail-pricing": "tsx scripts/verify-retail-pricing.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

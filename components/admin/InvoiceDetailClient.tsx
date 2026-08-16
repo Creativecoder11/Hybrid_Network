@@ -145,7 +145,39 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
           <TBody>
             {invoice.lineItems.map((li, i) => (
               <TR key={i}>
-                <TD className="text-text-primary">{li.description}</TD>
+                <TD className="text-text-primary">
+                  <p>{li.description}</p>
+                  {li.cdrIdentifier && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+                      <span className="font-mono">
+                        CDR: <span className="text-text-secondary">{li.cdrIdentifier}</span>
+                      </span>
+                      {li.wholesaleAmount !== null && li.wholesaleAmount !== undefined && (
+                        <span>
+                          Wholesale:{" "}
+                          <span className="text-text-secondary">
+                            {formatCurrency(li.wholesaleAmount, invoice.currency)}
+                          </span>
+                        </span>
+                      )}
+                      {li.retailPlanName && (
+                        <span>
+                          Plan: <span className="text-text-secondary">{li.retailPlanName}</span>
+                        </span>
+                      )}
+                      {li.pricingMethod && (
+                        <span>
+                          Pricing:{" "}
+                          <span className="text-text-secondary">
+                            {li.pricingMethod === "PERCENTAGE_MARKUP"
+                              ? `${li.markupPercent}% markup`
+                              : `${formatCurrency(li.fixedPrice, invoice.currency)} fixed`}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </TD>
                 <TD>
                   {li.quantity} {li.unit}
                 </TD>

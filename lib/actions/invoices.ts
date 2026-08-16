@@ -10,15 +10,17 @@ import { ServicePlan } from "@/models/ServicePlan";
 import { UsageRecord } from "@/models/UsageRecord";
 import { Settings } from "@/models/Settings";
 import { ActivityLog } from "@/models/ActivityLog";
+import { CdrChargeRecord } from "@/models/CdrChargeRecord";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateInvoiceNumber } from "@/lib/utils/ids";
 import { computeInvoiceLineItems } from "@/lib/billing/calc";
+import { roundCurrency } from "@/lib/billing/money";
 import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
 import { renderInvoicePdf } from "@/lib/pdf/render";
 import { sendMail } from "@/lib/email/mailer";
 import { invoiceEmailHtml, invoiceReminderEmailHtml } from "@/emails/templates";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
-import { createInvoiceSchema, markPaidSchema } from "@/lib/validations/invoice";
+import { createInvoiceSchema, markPaidSchema, updateInvoiceSchema } from "@/lib/validations/invoice";
 import type { ActionState } from "@/lib/actions/customers";
 
 function str(formData: FormData, key: string): string {
@@ -229,6 +231,137 @@ export async function markPaidAction(
   return { success: "Invoice marked as paid." };
 }
 
+export async function updateInvoiceAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  const parsed = updateInvoiceSchema.safeParse({
+    invoiceId: str(formData, "invoiceId"),
+    periodMonth: str(formData, "periodMonth"),
+    dueDate: str(formData, "dueDate"),
+    amount: str(formData, "amount"),
+    status: str(formData, "status"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
+  }
+
+  await connectDB();
+  const invoice = await Invoice.findById(parsed.data.invoiceId);
+  if (!invoice) return { error: "Invoice not found." };
+  if (invoice.status === "PAID") {
+    return { error: "A paid invoice can't be edited. Cancel it and create a new bill instead." };
+  }
+
+  const settings = await Settings.findOne({ key: "GLOBAL" });
+  const taxRate = settings?.taxRate ?? invoice.taxRate ?? 0;
+  const subtotal = parsed.data.amount;
+  const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
+  const total = Math.round((subtotal + taxAmount) * 100) / 100;
+
+  const description = invoice.lineItems[0]?.description ?? "Monthly Subscription";
+  invoice.set("lineItems", [
+    { description, quantity: 1, unit: "month", unitPrice: subtotal, amount: subtotal },
+  ]);
+  invoice.subtotal = subtotal;
+  invoice.taxRate = taxRate;
+  invoice.taxAmount = taxAmount;
+  invoice.total = total;
+  invoice.periodMonth = parsed.data.periodMonth;
+  invoice.dueDate = new Date(parsed.data.dueDate);
+
+  // We already returned above when the invoice was PAID, so reaching here
+  // means this is the transition INTO paid (not a no-op re-save of PAID).
+  if (parsed.data.status === "PAID") {
+    invoice.paidDate = new Date();
+    if (!invoice.paymentMethod) invoice.paymentMethod = "Manual Entry";
+  } else {
+    invoice.paidDate = null;
+  }
+  invoice.status = parsed.data.status;
+
+  await invoice.save();
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: invoice.customer,
+    action: "INVOICE_UPDATED",
+    meta: { invoiceNumber: invoice.invoiceNumber, total },
+  });
+
+  revalidatePath("/admin/billing");
+  revalidatePath(`/admin/billing/${parsed.data.invoiceId}`);
+  return { success: "Bill updated." };
+}
+
+export async function deleteInvoiceAction(invoiceId: string): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  await connectDB();
+  const invoice = await Invoice.findById(invoiceId);
+  if (!invoice) return { error: "Invoice not found." };
+
+  invoice.deletedAt = new Date();
+  await invoice.save();
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: invoice.customer,
+    action: "INVOICE_DELETED",
+    meta: { invoiceNumber: invoice.invoiceNumber },
+  });
+
+  revalidatePath("/admin/billing");
+  return { success: "Bill moved to trash." };
+}
+
+export async function restoreInvoiceAction(invoiceId: string): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  await connectDB();
+  const invoice = await Invoice.findOne({ _id: invoiceId, deletedAt: { $ne: null } });
+  if (!invoice) return { error: "Invoice not found in trash." };
+
+  invoice.deletedAt = null;
+  await invoice.save();
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: invoice.customer,
+    action: "INVOICE_RESTORED",
+    meta: { invoiceNumber: invoice.invoiceNumber },
+  });
+
+  revalidatePath("/admin/billing");
+  return { success: "Bill restored." };
+}
+
+export async function purgeInvoiceAction(invoiceId: string): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  await connectDB();
+  const invoice = await Invoice.findOne({ _id: invoiceId, deletedAt: { $ne: null } });
+  if (!invoice) return { error: "Invoice not found in trash." };
+
+  await Invoice.deleteOne({ _id: invoiceId });
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: invoice.customer,
+    action: "INVOICE_PURGED",
+    meta: { invoiceNumber: invoice.invoiceNumber },
+  });
+
+  revalidatePath("/admin/billing");
+  return { success: "Bill permanently deleted." };
+}
+
 export async function cancelInvoiceAction(invoiceId: string): Promise<ActionState> {
   const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
   if (!admin) return { error: "You're not authorized to perform this action." };
@@ -315,4 +448,120 @@ export async function bulkMarkPaidAction(
 
   revalidatePath("/admin/billing");
   return { success: `Marked ${result.modifiedCount} invoice${result.modifiedCount === 1 ? "" : "s"} as paid.` };
+}
+
+/**
+ * Generates one invoice per customer from selected, priced CDR charge
+ * records. Only MATCHED, not-yet-invoiced records are eligible; records with
+ * no matched customer are skipped (assign a customer to them first). Each
+ * line item keeps the wholesale/retail pricing snapshot for audit purposes.
+ */
+export async function generateInvoicesFromChargesAction(
+  chargeRecordIds: string[],
+  periodMonth: string,
+  dueDate: string
+): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  if (chargeRecordIds.length === 0) return { error: "Select at least one charge record." };
+  if (!/^\d{6}$/.test(periodMonth)) return { error: "Invalid billing period." };
+  if (!dueDate) return { error: "Due date is required." };
+
+  await connectDB();
+
+  const records = await CdrChargeRecord.find({
+    _id: { $in: chargeRecordIds },
+    status: "MATCHED",
+    invoice: null,
+  });
+  if (records.length === 0) {
+    return {
+      error: "None of the selected records are eligible to invoice (already invoiced, unmatched, or invalid).",
+    };
+  }
+
+  const byCustomer = new Map<string, typeof records>();
+  let skippedNoCustomer = 0;
+  for (const r of records) {
+    if (!r.customer) {
+      skippedNoCustomer++;
+      continue;
+    }
+    const key = r.customer.toString();
+    const list = byCustomer.get(key) ?? [];
+    list.push(r);
+    byCustomer.set(key, list);
+  }
+  if (byCustomer.size === 0) {
+    return { error: "None of the selected records have a matched customer yet. Assign a customer first." };
+  }
+
+  const settings = await Settings.findOne({ key: "GLOBAL" });
+  const taxRate = settings?.taxRate ?? 0;
+
+  let created = 0;
+  for (const [customerId, group] of byCustomer) {
+    const customer = await User.findById(customerId);
+    if (!customer) continue;
+
+    const lineItems = group.map((r) => ({
+      description: r.description || `CDR Charge — ${r.identifier}`,
+      quantity: 1,
+      unit: "",
+      unitPrice: r.retailAmount,
+      amount: r.retailAmount,
+      cdrChargeRecord: r._id,
+      cdrIdentifier: r.identifier,
+      wholesaleAmount: r.wholesaleAmount,
+      retailPlanName: r.retailPlanName,
+      pricingMethod: r.pricingMethodUsed ?? "",
+      markupPercent: r.markupPercentUsed,
+      fixedPrice: r.fixedPriceUsed,
+    }));
+
+    const subtotal = roundCurrency(lineItems.reduce((sum, li) => sum + li.amount, 0));
+    const taxAmount = roundCurrency(subtotal * (taxRate / 100));
+    const total = roundCurrency(subtotal + taxAmount);
+    const invoiceNumber = await generateInvoiceNumber();
+
+    const invoice = await Invoice.create({
+      invoiceNumber,
+      customer: customer._id,
+      periodMonth,
+      issueDate: new Date(),
+      dueDate: new Date(dueDate),
+      lineItems,
+      subtotal,
+      taxRate,
+      taxLabel: settings?.taxLabel ?? "GST",
+      taxAmount,
+      total,
+      currency: group[0].currency || "USD",
+      status: "DRAFT",
+      createdBy: admin.id,
+    });
+
+    await CdrChargeRecord.updateMany(
+      { _id: { $in: group.map((r) => r._id) } },
+      { $set: { invoice: invoice._id } }
+    );
+
+    await ActivityLog.create({
+      actor: admin.id,
+      targetCustomer: customer._id,
+      action: "CDR_CHARGES_INVOICED",
+      meta: { invoiceNumber, chargeCount: group.length, total },
+    });
+
+    created++;
+  }
+
+  revalidatePath("/admin/billing");
+  revalidatePath("/admin/billing/cdr-import");
+
+  if (created === 0) return { error: "No invoices could be created." };
+  const skippedNote =
+    skippedNoCustomer > 0 ? ` ${skippedNoCustomer} record(s) skipped (no matched customer).` : "";
+  return { success: `Created ${created} invoice${created === 1 ? "" : "s"}.${skippedNote}` };
 }

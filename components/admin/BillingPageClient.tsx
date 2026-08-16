@@ -12,8 +12,8 @@ import {
   Search,
   Download,
   Eye,
-  Clock,
-  AlertTriangle,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -32,17 +32,22 @@ import {
 } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateBillModal } from "@/components/admin/CreateBillModal";
+import { EditBillModal } from "@/components/admin/EditBillModal";
 import { MarkPaidModal } from "@/components/admin/MarkPaidModal";
+import { BillingTrashView } from "@/components/admin/BillingTrashView";
+import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import {
   bulkSendRemindersAction,
   bulkMarkPaidAction,
   markPaidAction,
+  deleteInvoiceAction,
 } from "@/lib/actions/invoices";
 import { formatCurrency, formatPeriodMonth } from "@/lib/utils/format";
 import type {
   BillableCustomerOption,
   BillingStats,
   InvoiceListRow,
+  TrashedInvoiceRow,
 } from "@/lib/types/billing";
 
 const STATUS_TONE: Record<
@@ -67,6 +72,9 @@ export function BillingPageClient({
   stats,
   customerOptions,
   allCustomers,
+  canDelete,
+  trashMode,
+  trashRows,
 }: {
   rows: InvoiceListRow[];
   status: string;
@@ -77,6 +85,9 @@ export function BillingPageClient({
   stats: BillingStats;
   customerOptions: BillableCustomerOption[];
   allCustomers: { id: string; label: string }[];
+  canDelete: boolean;
+  trashMode: boolean;
+  trashRows: TrashedInvoiceRow[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -87,6 +98,9 @@ export function BillingPageClient({
   const [bulkMarkPaidOpen, setBulkMarkPaidOpen] = useState(false);
   const [singleMarkPaidId, setSingleMarkPaidId] = useState<string | null>(null);
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [editTarget, setEditTarget] = useState<InvoiceListRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InvoiceListRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [searchInput, setSearchInput] = useState(q);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,6 +124,19 @@ export function BillingPageClient({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
+
+  if (trashMode) {
+    return (
+      <BillingTrashView
+        rows={trashRows}
+        onBack={() => {
+          const params = new URLSearchParams(searchParams.toString());
+          params.delete("trash");
+          router.push(`${pathname}?${params.toString()}`);
+        }}
+      />
+    );
+  }
 
   function toggleAll() {
     if (selected.size === rows.length) setSelected(new Set());
@@ -159,6 +186,19 @@ export function BillingPageClient({
     return result;
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    const result = await deleteInvoiceAction(deleteTarget.id);
+    setDeletingId(null);
+    if (result?.error) toast.error(result.error);
+    else {
+      toast.success(result?.success ?? "Bill moved to trash.");
+      setDeleteTarget(null);
+      router.refresh();
+    }
+  }
+
   const now = new Date();
   const defaultYear = now.getFullYear();
   const defaultMonth = String(now.getMonth() + 1).padStart(2, "0");
@@ -179,10 +219,21 @@ export function BillingPageClient({
             Cycle: {stats.cycleLabel} · closes in {stats.cycleDaysLeft} days
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="size-4" />
-          Add New Bill
-        </Button>
+        <div className="flex items-center gap-2">
+          {canDelete && (
+            <Button
+              variant="outline"
+              onClick={() => updateParams({ trash: "1" })}
+            >
+              <Trash2 className="size-4" />
+              Trash
+            </Button>
+          )}
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" />
+            Add New Bill
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -438,6 +489,25 @@ export function BillingPageClient({
                         >
                           <Download className="size-4" />
                         </a>
+                        {inv.status !== "PAID" && (
+                          <button
+                            onClick={() => setEditTarget(inv)}
+                            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-accent-blue"
+                            aria-label="Edit bill"
+                          >
+                            <Pencil className="size-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeleteTarget(inv)}
+                            disabled={deletingId === inv.id}
+                            className="rounded-lg p-1.5 text-text-muted hover:bg-red/10 hover:text-red disabled:opacity-50"
+                            aria-label="Delete bill"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
                       </div>
                     </TD>
                   </TR>
@@ -468,6 +538,24 @@ export function BillingPageClient({
           onConfirm={handleSingleMarkPaid}
         />
       )}
+      {editTarget && (
+        <EditBillModal
+          invoice={editTarget}
+          onClose={() => {
+            setEditTarget(null);
+            router.refresh();
+          }}
+        />
+      )}
+      <DeleteConfirmModal
+        open={!!deleteTarget}
+        title={`Delete bill ${deleteTarget?.invoiceNumber ?? ""}?`}
+        description="This bill will be moved to Trash. You can restore it or delete it permanently from there."
+        confirmLabel="Move to Trash"
+        loading={!!deleteTarget && deletingId === deleteTarget.id}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

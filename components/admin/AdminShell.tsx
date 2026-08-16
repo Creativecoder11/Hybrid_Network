@@ -81,6 +81,7 @@ export function AdminShell({
                 <p className="text-sm font-semibold leading-tight text-text-primary">{user.name}</p>
                 <p className="text-xs leading-tight text-text-muted">{user.email}</p>
               </div>
+              
             </div>
           </div>
         </div>
