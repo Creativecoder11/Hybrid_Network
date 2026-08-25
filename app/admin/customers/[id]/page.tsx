@@ -71,6 +71,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     imei: customer.imei ?? "",
     service: customer.service ?? "",
     vendor: customer.vendor ?? "",
+    starlinkVesselId: customer.starlinkVesselId ?? "",
+    starlinkServiceLineNumber: customer.starlinkServiceLineNumber ?? "",
     network: {
       originNumber: customer.network?.originNumber ?? "",
       originCountry: customer.network?.originCountry ?? "",

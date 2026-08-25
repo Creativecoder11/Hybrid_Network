@@ -16,7 +16,7 @@ export default async function PortalDevicesPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">My Devices</h1>
+        <p className="text-xl font-bold text-text-primary">My Devices</p>
         <p className="text-sm text-text-muted">Connection status, usage, and health for your terminal(s).</p>
       </div>
 

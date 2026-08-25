@@ -62,7 +62,7 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
   }
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="max-w-full space-y-6">
       <Link
         href="/admin/billing"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-text-primary"
@@ -74,7 +74,7 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</h1>
+            <p className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</p>
             <Badge tone={STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
           </div>
           <p className="mt-1 text-sm text-text-muted">

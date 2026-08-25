@@ -40,6 +40,8 @@ A billing, usage-tracking, and customer-management platform for an ISP distribut
    | `NEXT_PUBLIC_APP_URL` | Public base URL of the app, e.g. `http://localhost:3000` — used in invite/reset/invoice links |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | SMTP credentials for sending real email. **Leave blank in development** — emails are logged to the console instead of sent, including the invite/reset/invoice links, so you can click through flows without a mail server. |
    | `EMAIL_FROM` | From-address used on outgoing email |
+   | `API_URL` | **Despite the name, this is the SLASH API key** (`sk_...`), not a URL — sent as `X-API-Key` to the Starlink/SLASH API. See `lib/starlink/`. Leave blank to run with only mock terminal data. |
+   | `STARLINK_API_BASE_URL` | Optional override of the SLASH API base URL (defaults to `https://slash-api.rudra.sh/api/v1`) |
 
    If you don't have MongoDB running locally, the quickest option is a local install via Homebrew (`brew install mongodb-community`) or Docker (`docker run -d -p 27017:27017 mongo:8`). A managed MongoDB Atlas free tier also works — just put its connection string in `MONGODB_URI`.
 
@@ -101,6 +103,8 @@ lib/
   dashboard/      # admin dashboard stats aggregation
   db/             # Mongoose connection singleton
   pdf/            # @react-pdf/renderer invoice document
+  starlink/       # SLASH/Starlink API client (read data + WRITE passthrough), keyed by API_URL
+  terminals/      # terminal data access — liveProvider.ts (Starlink-linked customers) + mockProvider.ts (everyone else)
   validations/    # zod schemas
 models/           # Mongoose schemas
 emails/           # HTML email templates

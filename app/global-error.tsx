@@ -29,7 +29,7 @@ export default function GlobalError({
           textAlign: "center",
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Something went wrong</h1>
+        <p style={{ fontSize: 24, fontWeight: 700 }}>Something went wrong</p>
         <p style={{ marginTop: 8, color: "#9CA3AF", fontSize: 14, maxWidth: 380 }}>
           A critical error occurred while loading Hybrid Networks Portal.
         </p>

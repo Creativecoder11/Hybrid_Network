@@ -29,7 +29,7 @@ export default async function SetPasswordPage({
         <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-red/15 text-red">
           <AlertTriangle className="size-5" />
         </div>
-        <h1 className="text-xl font-bold text-text-primary">Invitation link expired</h1>
+        <p className="text-xl font-bold text-text-primary">Invitation link expired</p>
         <p className="mt-2 text-sm text-text-muted">
           This invitation link is invalid or has expired. Please contact your administrator to
           request a new invite, or reach out to support if you believe this is a mistake.
@@ -46,7 +46,7 @@ export default async function SetPasswordPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-text-primary">Set your password</h1>
+      <p className="text-2xl font-bold text-text-primary">Set your password</p>
       <p className="mt-1.5 text-sm text-text-muted">
         Welcome, {user.name.split(" ")[0]}. Choose a password to activate your account.
       </p>

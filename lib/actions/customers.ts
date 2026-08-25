@@ -67,6 +67,8 @@ export async function createCustomerAction(
     imei: str(formData, "imei"),
     service: str(formData, "service"),
     vendor: str(formData, "vendor"),
+    starlinkVesselId: str(formData, "starlinkVesselId"),
+    starlinkServiceLineNumber: str(formData, "starlinkServiceLineNumber"),
     network: buildNetworkFromForm(formData),
     planId: str(formData, "planId") || null,
     staticIp: str(formData, "staticIp"),
@@ -110,6 +112,8 @@ export async function createCustomerAction(
     imei: parsed.data.imei,
     service: parsed.data.service,
     vendor: parsed.data.vendor,
+    starlinkVesselId: parsed.data.starlinkVesselId,
+    starlinkServiceLineNumber: parsed.data.starlinkServiceLineNumber,
     network: parsed.data.network,
   });
 
@@ -166,6 +170,8 @@ export async function updateCustomerAction(
     imei: str(formData, "imei"),
     service: str(formData, "service"),
     vendor: str(formData, "vendor"),
+    starlinkVesselId: str(formData, "starlinkVesselId"),
+    starlinkServiceLineNumber: str(formData, "starlinkServiceLineNumber"),
     network: buildNetworkFromForm(formData),
     planId: str(formData, "planId") || null,
     staticIp: str(formData, "staticIp"),
@@ -206,6 +212,8 @@ export async function updateCustomerAction(
   customer.imei = parsed.data.imei ?? customer.imei;
   customer.service = parsed.data.service ?? customer.service;
   customer.vendor = parsed.data.vendor ?? customer.vendor;
+  customer.starlinkVesselId = parsed.data.starlinkVesselId ?? customer.starlinkVesselId;
+  customer.starlinkServiceLineNumber = parsed.data.starlinkServiceLineNumber ?? customer.starlinkServiceLineNumber;
   if (parsed.data.network) customer.network = parsed.data.network;
 
   // Suspending/reactivating via the status pills never resurrects an

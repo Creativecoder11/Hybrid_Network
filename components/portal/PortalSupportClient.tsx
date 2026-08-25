@@ -25,7 +25,7 @@ export function PortalSupportClient({ tickets }: { tickets: TicketRow[] }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Support</h1>
+          <p className="text-xl font-bold text-text-primary">Support</p>
           <p className="text-sm text-text-muted">Get help from our team.</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>

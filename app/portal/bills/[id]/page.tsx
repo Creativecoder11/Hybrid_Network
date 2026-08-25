@@ -45,7 +45,7 @@ export default async function PortalBillDetailPage({ params }: { params: Promise
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</h1>
+            <p className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</p>
             <Badge tone={STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
           </div>
           <p className="mt-1 text-sm text-text-muted">{formatPeriodMonth(invoice.periodMonth)}</p>

@@ -28,7 +28,7 @@ export default async function ResetPasswordPage({
         <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-red/15 text-red">
           <AlertTriangle className="size-5" />
         </div>
-        <h1 className="text-xl font-bold text-text-primary">Reset link expired</h1>
+        <p className="text-xl font-bold text-text-primary">Reset link expired</p>
         <p className="mt-2 text-sm text-text-muted">
           This password reset link is invalid or has expired. Please request a new one.
         </p>
@@ -44,7 +44,7 @@ export default async function ResetPasswordPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-text-primary">Reset your password</h1>
+      <p className="text-2xl font-bold text-text-primary">Reset your password</p>
       <p className="mt-1.5 text-sm text-text-muted">Hi {user.name.split(" ")[0]}, choose a new password below.</p>
       <ResetPasswordForm token={token} />
     </div>

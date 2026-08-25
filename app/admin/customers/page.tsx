@@ -106,6 +106,8 @@ export default async function CustomersPage({
       imei: c.imei ?? "",
       service: c.service ?? "",
       vendor: c.vendor ?? "",
+      starlinkVesselId: c.starlinkVesselId ?? "",
+      starlinkServiceLineNumber: c.starlinkServiceLineNumber ?? "",
       network: {
         originNumber: c.network?.originNumber ?? "",
         originCountry: c.network?.originCountry ?? "",

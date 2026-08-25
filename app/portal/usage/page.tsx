@@ -37,7 +37,7 @@ export default async function PortalUsagePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">Usage</h1>
+        <p className="text-xl font-bold text-text-primary">Usage</p>
         <p className="text-sm text-text-muted">Your data and voice usage over the last 12 months.</p>
       </div>
 

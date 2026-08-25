@@ -35,7 +35,7 @@ export function PortalBillsClient({ rows, status }: { rows: PortalInvoiceRow[]; 
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">My Bills</h1>
+          <p className="text-xl font-bold text-text-primary">My Bills</p>
           <p className="text-sm text-text-muted">Your full invoice history.</p>
         </div>
         <Select value={status} onChange={(e) => updateStatus(e.target.value)} className="sm:w-44">

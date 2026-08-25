@@ -29,6 +29,8 @@ export const createCustomerSchema = z.object({
   imei: z.string().optional().default(""),
   service: z.string().optional().default(""),
   vendor: z.string().optional().default(""),
+  starlinkVesselId: z.string().optional().default(""),
+  starlinkServiceLineNumber: z.string().optional().default(""),
 
   network: networkInfoSchema.optional(),
 

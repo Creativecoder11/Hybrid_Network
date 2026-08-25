@@ -93,7 +93,7 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl font-bold text-text-primary">{terminal.identification.serialNumber}</h1>
+            <p className="text-xl font-bold text-text-primary">{terminal.identification.serialNumber}</p>
             <Badge tone={STATUS_TONE[terminal.status]}>{terminal.status.replace(/_/g, " ")}</Badge>
             {terminal.live.onlineStatus === "ONLINE" ? (
               <Badge tone="green">

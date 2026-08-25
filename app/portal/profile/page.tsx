@@ -29,7 +29,7 @@ export default async function PortalProfilePage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">Profile</h1>
+        <p className="text-xl font-bold text-text-primary">Profile</p>
         <p className="text-sm text-text-muted">Your account information and security settings.</p>
       </div>
 

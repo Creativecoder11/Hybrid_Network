@@ -17,15 +17,15 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             src="/Hybrid - Logo.svg"
             alt="Hybrid Networks Logo"
             width={200}
-            height={50}
+            height={69}
           />
         </div>
 
         <div className="relative max-w-xl z-10">
           
-          <h1 className="mt-4 text-6xl font-extrabold leading-tight text-text-primary">
-            Run your network's <br/>billing like clockwork.
-          </h1>
+          <h2 className="mt-4 text-6xl font-extrabold leading-tight text-text-primary">
+            Run your network&apos;s <br/>billing like clockwork.
+          </h2>
           <p className="mt-4 text-lg leading-relaxed">
             Track usage, generate invoices, and manage every customer across
             Starlink, Fiber, and VSAT connections from a single dashboard.
@@ -43,12 +43,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <Image
               src="/Hybrid - Logo.svg"
               alt="Hybrid Networks Logo"
-              width={36}
+              width={104}
               height={36}
             />
-            <span className="text-sm font-bold tracking-wide text-text-primary">
-              HYBRID NETWORKS
-            </span>
           </div>
           {children}
         </div>

@@ -2,12 +2,15 @@ import "server-only";
 import { connectDB } from "@/lib/db/connect";
 import { TerminalState } from "@/models/TerminalState";
 import { mockListTerminals, mockGetTerminal } from "./mockProvider";
+import { liveListTerminals, liveGetTerminal } from "./liveProvider";
 import type { TerminalRecord, TerminalListFilters, RemoteCommandType } from "./types";
 
 // Public API for the rest of the app. Everything above this file (Server
-// Actions, pages, components) only ever imports from here — swapping the
-// mock provider for a real API client later means changing the two mock*
-// imports below to a liveProvider, with zero changes anywhere else.
+// Actions, pages, components) only ever imports from here. Customers linked
+// to a real Starlink vessel (User.starlinkVesselId) are served by
+// liveProvider; everyone else keeps using the fabricated mockProvider data.
+// Commands (sendTerminalCommand below) stay local-only for both sources —
+// no write action is wired to the real Starlink API yet.
 
 async function applyOverrides(records: TerminalRecord[]): Promise<TerminalRecord[]> {
   if (records.length === 0) return records;
@@ -28,12 +31,15 @@ async function applyOverrides(records: TerminalRecord[]): Promise<TerminalRecord
 }
 
 export async function listTerminals(filters?: TerminalListFilters): Promise<TerminalRecord[]> {
-  const records = await mockListTerminals(filters);
-  return applyOverrides(records);
+  const [liveRecords, mockRecords] = await Promise.all([
+    liveListTerminals(filters),
+    mockListTerminals(filters),
+  ]);
+  return applyOverrides([...liveRecords, ...mockRecords]);
 }
 
 export async function getTerminal(id: string): Promise<TerminalRecord | null> {
-  const record = await mockGetTerminal(id);
+  const record = (await liveGetTerminal(id)) ?? (await mockGetTerminal(id));
   if (!record) return null;
   const [withOverrides] = await applyOverrides([record]);
   return withOverrides;

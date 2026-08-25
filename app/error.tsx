@@ -14,7 +14,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
       <div className="flex size-14 items-center justify-center rounded-full bg-red/15 text-red">
         <AlertTriangle className="size-6" />
       </div>
-      <h1 className="mt-5 text-2xl font-bold text-text-primary">Something went wrong</h1>
+      <p className="mt-5 text-2xl font-bold text-text-primary">Something went wrong</p>
       <p className="mt-2 max-w-sm text-sm text-text-muted">
         An unexpected error occurred. You can try again, or head back to safety.
       </p>

@@ -297,7 +297,14 @@ function generateTerminal(seed: SourceCustomer | { iccid: string; vendor: string
 
 async function loadSourceCustomers(): Promise<SourceCustomer[]> {
   await connectDB();
-  const customers = await User.find({ role: "CUSTOMER", iccid: { $nin: [null, ""] } }).lean();
+  // Customers linked to a real Starlink vessel (User.starlinkVesselId) are
+  // served by lib/terminals/liveProvider.ts instead — excluded here so they
+  // don't get a duplicate, fabricated terminal record.
+  const customers = await User.find({
+    role: "CUSTOMER",
+    iccid: { $nin: [null, ""] },
+    starlinkVesselId: { $in: [null, ""] },
+  }).lean();
   const subs = await Subscription.find({
     customer: { $in: customers.map((c) => c._id) },
     status: "ACTIVE",

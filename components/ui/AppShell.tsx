@@ -20,7 +20,7 @@ function LogoMark() {
       src="/Hybrid - Logo.svg"
       alt="Logo"
       width={173}
-      height={80}
+      height={60}
       loading="eager"
       className=""
     />

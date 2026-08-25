@@ -71,6 +71,12 @@ const UserSchema = new Schema(
     imei: { type: String, default: "" },
     service: { type: String, default: "" },
     vendor: { type: String, default: "" },
+
+    // Links this customer to a real device in the Starlink/SLASH API (see
+    // lib/starlink/). Starlink has no ICCID concept, so this is a separate,
+    // admin-entered identifier — not derived from iccid/imei above.
+    starlinkVesselId: { type: String, default: "", index: true },
+    starlinkServiceLineNumber: { type: String, default: "" },
     network: { type: NetworkInfoSchema, default: () => ({}) },
   },
   { timestamps: true }

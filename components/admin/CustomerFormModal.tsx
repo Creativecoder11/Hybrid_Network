@@ -165,6 +165,29 @@ export function CustomerFormModal({
           </div>
         </div>
 
+        <SectionLabel>Starlink Linking</SectionLabel>
+        <p className="-mt-2 mb-3 text-xs text-text-muted">
+          Links this customer to a real device in the Starlink/SLASH API. Starlink has no ICCID —
+          paste the Vessel ID from the SLASH dashboard to pull live status, usage, and location for
+          this customer&apos;s terminal(s). Leave blank to keep using simulated device data.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Starlink Vessel ID">
+            <Input
+              name="starlinkVesselId"
+              defaultValue={customer?.starlinkVesselId}
+              placeholder="e.g. 019ff593-6557-785c-ac33-36d11b7f301c"
+            />
+          </Field>
+          <Field label="Starlink Service Line Number">
+            <Input
+              name="starlinkServiceLineNumber"
+              defaultValue={customer?.starlinkServiceLineNumber}
+              placeholder="e.g. SL-DF-15109193-35286-9"
+            />
+          </Field>
+        </div>
+
         <SectionLabel>Network Information</SectionLabel>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Origin Number">

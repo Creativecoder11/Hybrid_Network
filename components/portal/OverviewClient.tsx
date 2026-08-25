@@ -160,9 +160,9 @@ export function OverviewClient({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">
+        <p className="text-xl font-bold text-text-primary">
           Welcome back, <span className="text-accent-green">{firstName}</span>
-        </h1>
+        </p>
         <p className="text-sm text-text-muted">Here&apos;s what&apos;s been happening with your network today.</p>
       </div>
 

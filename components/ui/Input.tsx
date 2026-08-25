@@ -33,7 +33,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           />
           {trailing && (
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted">
-              {/* {trailing} */}
+              {trailing}
             </span>
           )}
         </div>

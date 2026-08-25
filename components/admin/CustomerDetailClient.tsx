@@ -146,12 +146,12 @@ export function CustomerDetailClient({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-text-primary">{customer.name}</h1>
+            <p className="text-xl font-bold">{customer.name}</p>
             <Badge tone={STATUS_TONE[customer.status]}>{STATUS_LABEL[customer.status]}</Badge>
           </div>
-          <p className="mt-1 text-sm text-text-muted">
+          <span className="mt-1 text-sm text-text-muted">
             {customer.customerId} {customer.customerCode && `· ${customer.customerCode}`} · {customer.email}
-          </p>
+          </span>
         </div>
         <Button onClick={() => setEditOpen(true)}>
           <Pencil className="size-4" />
@@ -183,6 +183,8 @@ export function CustomerDetailClient({
                     <InfoRow label="IMEI" value={customer.imei} />
                     <InfoRow label="Service" value={customer.service} />
                     <InfoRow label="Vendor" value={customer.vendor} />
+                    <InfoRow label="Starlink Vessel ID" value={customer.starlinkVesselId} />
+                    <InfoRow label="Starlink Service Line" value={customer.starlinkServiceLineNumber} />
                   </CardContent>
                 </Card>
                 <Card>

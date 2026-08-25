@@ -22,7 +22,7 @@ export function ForgotPasswordForm() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-text-primary">Forgot password</h1>
+      <p className="text-2xl font-bold text-text-primary">Forgot password</p>
       <p className="mt-1.5 text-sm text-text-muted">
         Enter your email or ID and we&apos;ll send you a link to reset your password.
       </p>

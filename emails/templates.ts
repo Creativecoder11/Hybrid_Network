@@ -13,7 +13,7 @@ export function inviteEmailHtml(params: {
     : "";
 
   return emailLayout(`
-    <h1 style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Your Hybrid Networks account is ready</h1>
+    <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Your Hybrid Networks account is ready</p>
     <p style="margin:0 0 16px;">Hi ${name},</p>
     <p style="margin:0 0 16px;">
       ${
@@ -33,7 +33,7 @@ export function inviteEmailHtml(params: {
 
 export function passwordResetEmailHtml(params: { name: string; actionUrl: string }) {
   return emailLayout(`
-    <h1 style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Reset your password</h1>
+    <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Reset your password</p>
     <p style="margin:0 0 16px;">Hi ${params.name},</p>
     <p style="margin:0 0 16px;">We received a request to reset your Hybrid Networks account password.</p>
     ${emailButton("Reset Password", params.actionUrl)}
@@ -51,7 +51,7 @@ export function invoiceEmailHtml(params: {
   portalUrl: string;
 }) {
   return emailLayout(`
-    <h1 style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Invoice ${params.invoiceNumber}</h1>
+    <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Invoice ${params.invoiceNumber}</p>
     <p style="margin:0 0 16px;">Hi ${params.name},</p>
     <p style="margin:0 0 16px;">
       Your invoice <strong>${params.invoiceNumber}</strong> for <strong>${params.amount}</strong>
@@ -72,7 +72,7 @@ export function invoiceReminderEmailHtml(params: {
   portalUrl: string;
 }) {
   return emailLayout(`
-    <h1 style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Payment reminder: ${params.invoiceNumber}</h1>
+    <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Payment reminder: ${params.invoiceNumber}</p>
     <p style="margin:0 0 16px;">Hi ${params.name},</p>
     <p style="margin:0 0 16px;">
       This is a friendly reminder that invoice <strong>${params.invoiceNumber}</strong> for

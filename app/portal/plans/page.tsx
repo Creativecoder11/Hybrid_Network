@@ -21,7 +21,7 @@ export default async function PortalPlansPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-text-primary">My Plans</h1>
+        <p className="text-xl font-bold text-text-primary">My Plans</p>
         <p className="text-sm text-text-muted">Your active subscription and this period&apos;s usage.</p>
       </div>
 
@@ -33,7 +33,7 @@ export default async function PortalPlansPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-accent-green">{plan.provider}</p>
-                <h2 className="mt-1 text-lg font-bold text-text-primary">{plan.planName}</h2>
+                <p className="mt-1 text-lg font-bold text-text-primary">{plan.planName}</p>
               </div>
               <p className="text-2xl font-bold text-text-primary">
                 {formatCurrency(plan.monthlyPrice, plan.currency)}

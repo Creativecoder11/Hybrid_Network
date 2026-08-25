@@ -29,6 +29,8 @@ export type CustomerRow = {
   imei: string;
   service: string;
   vendor: string;
+  starlinkVesselId: string;
+  starlinkServiceLineNumber: string;
   network: NetworkInfo;
   planId: string;
   planName: string;

@@ -34,7 +34,7 @@ export function DeviceCard({ terminal }: { terminal: TerminalRecord }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
-              <h3 className="text-base font-semibold text-text-primary">{terminal.product.model}</h3>
+              <p className="text-base font-semibold text-text-primary">{terminal.product.model}</p>
               <Badge tone={STATUS_TONE[terminal.status]}>{terminal.status.replace(/_/g, " ")}</Badge>
             </div>
             <p className="mt-1 text-xs text-text-muted">
