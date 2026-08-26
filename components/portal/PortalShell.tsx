@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition, type ReactNode } from "react";
-import { LayoutDashboard, Receipt, Wifi, BarChart3, Satellite, LifeBuoy, User, Bell } from "lucide-react";
+import { LayoutDashboard, Receipt, Wifi, BarChart3, Satellite, LifeBuoy, User, Bell, MapPin, AlertTriangle, FileDown } from "lucide-react";
 import { AppShell, type NavItem } from "@/components/ui/AppShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { logoutAction } from "@/lib/auth/actions";
@@ -13,6 +13,9 @@ const NAV: NavItem[] = [
   { label: "My Plans", href: "/portal/plans", icon: Wifi },
   { label: "Usage", href: "/portal/usage", icon: BarChart3 },
   { label: "My Devices", href: "/portal/devices", icon: Satellite },
+  { label: "Tracking", href: "/portal/tracking", icon: MapPin },
+  { label: "Alerts", href: "/portal/alerts", icon: AlertTriangle },
+  { label: "Reports", href: "/portal/reports", icon: FileDown },
   { label: "Support", href: "/portal/support", icon: LifeBuoy },
   { label: "Profile", href: "/portal/profile", icon: User },
 ];

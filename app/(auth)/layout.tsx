@@ -22,7 +22,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div className="relative max-w-xl z-10">
-          
           <h2 className="mt-4 text-6xl font-extrabold leading-tight text-text-primary">
             Run your network&apos;s <br/>billing like clockwork.
           </h2>

@@ -70,6 +70,9 @@ export type UsageStats = {
   sessionBytes: number;
   billingPeriodBytes: number;
   billingPeriodMonth: string;
+  /** Starlink-specific priority/standard data split — only set for live (SLASH-sourced) terminals. */
+  priorityBytes?: number;
+  standardBytes?: number;
 };
 
 export type LinkQuality = "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
@@ -163,6 +166,14 @@ export type TerminalRecord = {
   planBilling: TerminalPlanBilling;
   auditHistory: TerminalAuditEntry[];
   dataRefreshRateSeconds: number;
+  /**
+   * Set only for terminals sourced from the real Starlink/SLASH API
+   * (see lib/terminals/liveProvider.ts). Lets the command layer route
+   * REBOOT to the real `reboot_user_terminal` passthrough action instead of
+   * the local-only simulation used for mock terminals. Undefined for mock
+   * terminals.
+   */
+  sourceVesselId?: string;
 };
 
 export type TerminalListFilters = {

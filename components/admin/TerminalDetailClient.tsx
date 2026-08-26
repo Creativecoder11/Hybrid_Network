@@ -23,7 +23,10 @@ import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui
 import { EmptyState } from "@/components/ui/EmptyState";
 import { sendTerminalCommandAction } from "@/lib/actions/terminals";
 import { formatDateTime, formatGB } from "@/lib/utils/format";
-import type { RemoteCommandType, TerminalRecord, TerminalStatus } from "@/lib/terminals/types";
+import { LocationMap } from "@/components/ui/LocationMap";
+import { FreshnessIndicator } from "@/components/ui/FreshnessIndicator";
+import { usePolling } from "@/lib/hooks/usePolling";
+import type { RemoteCommandType, TerminalRecord, TerminalStatus, TerminalAuditEntry } from "@/lib/terminals/types";
 
 const STATUS_TONE: Record<TerminalStatus, "green" | "amber" | "red" | "neutral" | "blue"> = {
   ACTIVE: "green",
@@ -62,12 +65,24 @@ function MetricTile({ label, value, sub }: { label: string; value: string; sub?:
   );
 }
 
-export function TerminalDetailClient({ terminal, canManage }: { terminal: TerminalRecord; canManage: boolean }) {
+export function TerminalDetailClient({
+  terminal,
+  canManage,
+  auditTrail,
+}: {
+  terminal: TerminalRecord;
+  canManage: boolean;
+  auditTrail: TerminalAuditEntry[];
+}) {
   const router = useRouter();
   const [pendingCommand, setPendingCommand] = useState<RemoteCommandType | null>(null);
 
+  const isLive = !!terminal.sourceVesselId;
+  usePolling(() => router.refresh(), 45_000, isLive);
+
   async function runCommand(command: RemoteCommandType) {
     if (command === "SUSPEND" && !confirm("Suspend this terminal's service?")) return;
+    if (command === "REBOOT" && isLive && !confirm("This will reboot the physical terminal via the SLASH API. Continue?")) return;
     setPendingCommand(command);
     const result = await sendTerminalCommandAction(terminal.id, command);
     setPendingCommand(null);
@@ -183,9 +198,10 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                 <Card>
                   <CardContent className="pt-5">
                     <p className="mb-3 text-xs font-bold uppercase tracking-wider text-accent-green">Live Terminal Data</p>
-                    <p className="mb-4 text-xs text-text-muted">
-                      Refreshes every {terminal.dataRefreshRateSeconds}s · last seen {formatDateTime(terminal.live.lastSeenAt)}
-                    </p>
+                    <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+                      <span>Refreshes every {terminal.dataRefreshRateSeconds}s · last seen {formatDateTime(terminal.live.lastSeenAt)}</span>
+                      <FreshnessIndicator lastSeenAt={terminal.live.lastSeenAt} />
+                    </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <MetricTile label="Online Status" value={terminal.live.onlineStatus} />
                       <MetricTile label="Connection State" value={terminal.live.connectionState} />
@@ -198,7 +214,12 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
 
                 <Card>
                   <CardContent className="pt-5">
-                    <p className="mb-3 text-xs font-bold uppercase tracking-wider text-accent-green">Network Performance</p>
+                    <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent-green">Network Performance</p>
+                    {terminal.sourceVesselId && (
+                      <p className="mb-3 text-xs text-text-muted">
+                        Not returned by the SLASH API for this device yet — shown as 0 rather than estimated.
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <MetricTile label="Latency" value={`${terminal.network.latencyMs} ms`} />
                       <MetricTile label="Packet Loss" value={`${terminal.network.packetLossPct}%`} />
@@ -224,12 +245,18 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                       <MapPin className="size-3.5" /> Current GPS Location
                     </p>
                     {terminal.location ? (
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        <MetricTile label="Latitude" value={terminal.location.latitude.toFixed(5)} />
-                        <MetricTile label="Longitude" value={terminal.location.longitude.toFixed(5)} />
-                        <MetricTile label="Altitude" value={`${terminal.location.altitudeMeters} m`} />
-                        <MetricTile label="Accuracy" value={`±${terminal.location.accuracyMeters} m`} />
-                      </div>
+                      <>
+                        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          <MetricTile label="Latitude" value={terminal.location.latitude.toFixed(5)} />
+                          <MetricTile label="Longitude" value={terminal.location.longitude.toFixed(5)} />
+                          <MetricTile label="Altitude" value={`${terminal.location.altitudeMeters} m`} />
+                          <MetricTile label="Accuracy" value={`±${terminal.location.accuracyMeters} m`} />
+                        </div>
+                        <LocationMap
+                          points={[{ id: terminal.id, latitude: terminal.location.latitude, longitude: terminal.location.longitude, label: terminal.identification.serialNumber }]}
+                          trail={terminal.locationHistory}
+                        />
+                      </>
                     ) : (
                       <p className="text-sm text-text-muted">No location fix — terminal not yet activated.</p>
                     )}
@@ -402,12 +429,18 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
           {
             key: "audit",
             label: "Audit History",
-            content:
-              terminal.auditHistory.length === 0 ? (
-                <EmptyState title="No audit history" />
-              ) : (
+            content: (() => {
+              const hasReal = auditTrail.length > 0;
+              const entries = hasReal ? auditTrail : terminal.auditHistory;
+              if (entries.length === 0) return <EmptyState title="No audit history" />;
+              return (
                 <div className="space-y-2">
-                  {terminal.auditHistory.map((a) => (
+                  <p className="text-xs text-text-muted">
+                    {hasReal
+                      ? "Real activity recorded by this app (not a SLASH API audit log — the provider has no such endpoint)."
+                      : "Illustrative history — no recorded activity on this terminal yet."}
+                  </p>
+                  {entries.map((a) => (
                     <div key={a.id} className="flex items-start justify-between gap-4 rounded-xl border border-line bg-surface p-3.5 text-sm">
                       <div>
                         <p className="font-medium text-text-primary">{a.action}</p>
@@ -418,7 +451,8 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                     </div>
                   ))}
                 </div>
-              ),
+              );
+            })(),
           },
           ...(canManage
             ? [
@@ -433,12 +467,14 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                       <ActionButton
                         icon={RefreshCw}
                         label="Reboot Terminal"
+                        sublabel={isLive ? "Live — sent to the real device" : "Simulated (no live device linked)"}
                         pending={pendingCommand === "REBOOT"}
                         onClick={() => runCommand("REBOOT")}
                       />
                       <ActionButton
                         icon={RefreshCw}
                         label="Refresh Service"
+                        sublabel="Simulated — not supported by current API"
                         pending={pendingCommand === "REFRESH_SERVICE"}
                         onClick={() => runCommand("REFRESH_SERVICE")}
                       />
@@ -446,6 +482,11 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                         <ActionButton
                           icon={Ban}
                           label="Suspend Service"
+                          sublabel={
+                            isLive
+                              ? "Simulated — real deactivation needs an account number this app doesn't capture yet"
+                              : "Simulated — not supported by current API"
+                          }
                           pending={pendingCommand === "SUSPEND"}
                           onClick={() => runCommand("SUSPEND")}
                         />
@@ -453,6 +494,7 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                         <ActionButton
                           icon={CheckCircle2}
                           label="Reactivate Service"
+                          sublabel="Simulated — not supported by current API"
                           pending={pendingCommand === "REACTIVATE"}
                           onClick={() => runCommand("REACTIVATE")}
                         />
@@ -460,12 +502,14 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
                       <ActionButton
                         icon={UploadCloud}
                         label="Update Firmware"
+                        sublabel="Simulated — not supported by current API"
                         pending={pendingCommand === "UPDATE_FIRMWARE"}
                         onClick={() => runCommand("UPDATE_FIRMWARE")}
                       />
                       <ActionButton
                         icon={Stethoscope}
                         label="Request Diagnostics"
+                        sublabel="Simulated — not supported by current API"
                         pending={pendingCommand === "REQUEST_DIAGNOSTICS"}
                         onClick={() => runCommand("REQUEST_DIAGNOSTICS")}
                       />
@@ -483,11 +527,13 @@ export function TerminalDetailClient({ terminal, canManage }: { terminal: Termin
 function ActionButton({
   icon: Icon,
   label,
+  sublabel,
   onClick,
   pending,
 }: {
   icon: typeof Power;
   label: string;
+  sublabel?: string;
   onClick: () => void;
   pending?: boolean;
 }) {
@@ -495,10 +541,13 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={pending}
-      className="flex w-full items-center gap-3 rounded-xl border border-line px-4 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-raised disabled:opacity-50"
+      className="flex w-full items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-text-secondary transition-colors hover:bg-surface-raised disabled:opacity-50"
     >
-      <Icon className="size-4" />
-      {pending ? "Sending…" : label}
+      <Icon className="size-4 shrink-0" />
+      <span>
+        <span className="block">{pending ? "Sending…" : label}</span>
+        {sublabel && !pending && <span className="block text-xs font-normal text-text-muted">{sublabel}</span>}
+      </span>
     </button>
   );
 }

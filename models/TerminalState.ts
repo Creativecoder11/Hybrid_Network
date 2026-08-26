@@ -17,6 +17,10 @@ const TerminalStateSchema = new Schema(
     lastCommandAction: { type: String, default: "" },
     lastCommandAt: { type: Date, default: null },
     lastCommandBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    // "SENT" when a REBOOT was actually dispatched to the real SLASH API
+    // (live-linked terminal), "SKIPPED" when it was only simulated locally
+    // (mock terminal, or a command with no confirmed real endpoint).
+    lastCommandTarget: { type: String, enum: ["SENT", "SKIPPED"], default: null },
   },
   { timestamps: true }
 );

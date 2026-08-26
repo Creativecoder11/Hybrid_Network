@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { DollarSign, Receipt, Users, UserCheck, UploadCloud, ArrowRight } from "lucide-react";
+import { DollarSign, Receipt, Users, UserCheck, UploadCloud, ArrowRight, Satellite, AlertTriangle } from "lucide-react";
 import { requireRole } from "@/lib/auth/dal";
 import { getAdminDashboardStats } from "@/lib/dashboard/adminStats";
+import { listTerminals } from "@/lib/terminals/service";
+import { listTerminalAlerts } from "@/lib/terminals/alerts";
+import { computeFleetOverview } from "@/lib/terminals/fleetStats";
 import { Card, CardContent } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Badge";
@@ -11,7 +14,7 @@ import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OutstandingBillRowActions } from "@/components/admin/OutstandingBillRowActions";
-import { formatCurrency, formatDate, formatPeriodMonth } from "@/lib/utils/format";
+import { formatCurrency, formatDate, formatDateTime, formatPeriodMonth } from "@/lib/utils/format";
 
 
 
@@ -28,7 +31,16 @@ function pctChange(current: number, previous: number): { value: string; positive
 
 export default async function AdminDashboardPage() {
   const user = await requireRole(["SUPER_ADMIN", "SUB_ADMIN"], "/portal");
-  const stats = await getAdminDashboardStats();
+  const [stats, terminals, alerts] = await Promise.all([
+    getAdminDashboardStats(),
+    listTerminals(),
+    listTerminalAlerts(),
+  ]);
+  const fleet = computeFleetOverview(terminals);
+  const recentAlerts = [...alerts]
+    .filter((a) => a.active)
+    .sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""))
+    .slice(0, 5);
 
   const maxPlanRevenue = Math.max(1, ...stats.revenueByPlan.map((p) => p.total));
   const maxUsageTypeRevenue = Math.max(1, ...stats.revenueByUsageType.map((p) => p.total));
@@ -246,6 +258,105 @@ export default async function AdminDashboardPage() {
             </div>
           )}
         </Card>
+      </div>
+
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-lg font-bold text-text-primary">Fleet Overview</p>
+            <p className="text-xs text-text-muted">Terminal, connectivity, and usage stats — computed by this app from SLASH/mock terminal data.</p>
+          </div>
+          <Link href="/admin/terminals" className="flex items-center gap-1 text-xs font-medium text-accent-blue hover:underline">
+            All Terminals <ArrowRight className="size-3" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Total Terminals" value={String(fleet.total)} icon={Satellite} tone="blue" animatedBorder />
+          <StatCard label="Online Terminals" value={String(fleet.online)} icon={Satellite} tone="green" animatedBorder />
+          <StatCard label="Offline Terminals" value={String(fleet.offline)} icon={Satellite} tone="neutral" animatedBorder />
+          <StatCard label="Suspended" value={String(fleet.suspended)} icon={Satellite} tone="amber" animatedBorder />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="p-5">
+            <p className="text-sm font-semibold text-text-primary">Connectivity Overview</p>
+            <p className="mb-4 text-xs text-text-muted">Fleet averages across all terminals</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-line bg-surface-raised p-3.5">
+                <p className="text-xs text-text-muted">Avg Latency</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgLatencyMs} ms</p>
+              </div>
+              <div className="rounded-xl border border-line bg-surface-raised p-3.5">
+                <p className="text-xs text-text-muted">Avg Signal Quality</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgSignalQualityPct}%</p>
+              </div>
+              <div className="rounded-xl border border-line bg-surface-raised p-3.5">
+                <p className="text-xs text-text-muted">Avg Throughput</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgThroughputMbps} Mbps</p>
+              </div>
+              <div className="rounded-xl border border-line bg-surface-raised p-3.5">
+                <p className="text-xs text-text-muted">Avg Uptime</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgUptimePct}%</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-text-muted">
+              {fleet.connectivity.activeCount} active · {fleet.connectivity.inactiveCount} inactive
+            </p>
+          </Card>
+
+          <Card className="p-5">
+            <p className="text-sm font-semibold text-text-primary">Usage Overview</p>
+            <p className="mb-4 text-xs text-text-muted">Current billing period, fleet-wide</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-muted">Total Usage</span>
+                <span className="text-sm font-semibold text-text-primary">{fleet.usage.totalGB.toFixed(1)} GB</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-muted">Priority Data</span>
+                <span className="text-sm font-medium text-text-primary">{fleet.usage.priorityGB.toFixed(1)} GB</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-muted">Standard Data</span>
+                <span className="text-sm font-medium text-text-primary">{fleet.usage.standardGB.toFixed(1)} GB</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-line-soft pt-3">
+                <span className="text-xs text-text-muted">Avg Daily Usage</span>
+                <span className="text-sm font-medium text-text-primary">{fleet.usage.avgDailyGB.toFixed(1)} GB</span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-sm font-semibold text-text-primary">Recent Alerts</p>
+              <Link href="/admin/alerts" className="text-xs font-medium text-accent-blue hover:underline">
+                View All
+              </Link>
+            </div>
+            <p className="mb-4 text-xs text-text-muted">Active terminal alert episodes</p>
+            {recentAlerts.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <AlertTriangle className="size-5 text-text-muted" />
+                <p className="text-xs text-text-muted">No active alerts.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentAlerts.map((a, i) => (
+                  <div key={a.id ?? i} className="border-b border-line-soft pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-text-primary">{a.type ?? "Alert"}</p>
+                      <Badge tone="red">Active</Badge>
+                    </div>
+                    <p className="text-xs text-text-muted">{a.terminalLabel ?? "Unknown device"}</p>
+                    <p className="text-xs text-text-muted">First seen {a.startedAt ? formatDateTime(a.startedAt) : "—"}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -1,13 +1,10 @@
 import "server-only";
 import { connectDB } from "@/lib/db/connect";
 import { User } from "@/models/User";
-import {
-  getVessel,
-  getVesselDataUsage,
-  getVesselServicePlan,
-  getVesselLocation,
-  getVesselLocationHistory,
-} from "@/lib/starlink/read";
+import { getVessel } from "@/lib/starlink/vessels";
+import { getVesselDataUsage } from "@/lib/starlink/usage";
+import { getVesselServicePlan } from "@/lib/starlink/service-plans";
+import { getVesselLocation, getVesselLocationHistory } from "@/lib/starlink/locations";
 import type { SlashVessel, SlashDataUsage, SlashServicePlan, SlashLocation, SlashLocationHistoryPoint } from "@/lib/starlink/types";
 import type { TerminalRecord, TerminalListFilters, TerminalStatus, LocationHistoryPoint } from "./types";
 
@@ -139,6 +136,8 @@ function buildRecord(
       sessionBytes: 0,
       billingPeriodBytes: Math.round(monthlyUsageGB * 1e9),
       billingPeriodMonth: (dataUsage?.billingCycleStart ?? new Date().toISOString()).slice(0, 7),
+      priorityBytes: dataUsage ? Math.round(dataUsage.priorityGB * 1e9) : undefined,
+      standardBytes: dataUsage ? Math.round(dataUsage.standardGB * 1e9) : undefined,
     },
     network: {
       // No network-performance telemetry surfaced by this API yet (tenant's
@@ -175,6 +174,7 @@ function buildRecord(
     },
     auditHistory: [],
     dataRefreshRateSeconds: 60,
+    sourceVesselId: vessel.vesselId,
   };
 }
 

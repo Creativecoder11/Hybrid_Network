@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Wifi, WifiOff, MapPin, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -42,15 +43,23 @@ export function DeviceCard({ terminal }: { terminal: TerminalRecord }) {
               {terminal.identification.iccid}
             </p>
           </div>
-          {terminal.live.onlineStatus === "ONLINE" ? (
-            <Badge tone="green">
-              <Wifi className="size-3" /> Online
-            </Badge>
-          ) : (
-            <Badge tone="neutral">
-              <WifiOff className="size-3" /> Offline
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {terminal.live.onlineStatus === "ONLINE" ? (
+              <Badge tone="green">
+                <Wifi className="size-3" /> Online
+              </Badge>
+            ) : (
+              <Badge tone="neutral">
+                <WifiOff className="size-3" /> Offline
+              </Badge>
+            )}
+            <Link
+              href={`/portal/devices/${terminal.id}`}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-raised"
+            >
+              View Details
+            </Link>
+          </div>
         </div>
 
         {openFaults.length > 0 && (

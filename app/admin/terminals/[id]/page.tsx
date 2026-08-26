@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTerminal } from "@/lib/terminals/service";
+import { getTerminalAuditTrail } from "@/lib/terminals/audit";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { TerminalDetailClient } from "@/components/admin/TerminalDetailClient";
 
@@ -13,7 +14,10 @@ export default async function TerminalDetailPage({ params }: { params: Promise<{
   const terminal = await getTerminal(decodeURIComponent(id));
   if (!terminal) notFound();
 
-  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  const [admin, auditTrail] = await Promise.all([
+    getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]),
+    getTerminalAuditTrail(terminal.id),
+  ]);
 
-  return <TerminalDetailClient terminal={terminal} canManage={!!admin} />;
+  return <TerminalDetailClient terminal={terminal} canManage={!!admin} auditTrail={auditTrail} />;
 }

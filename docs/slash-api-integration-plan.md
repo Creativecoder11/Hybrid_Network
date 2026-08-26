@@ -1,7 +1,35 @@
-# SLASH API Integration — Phase 1: Capability Matrix & Architecture
+# SLASH API Integration — Capability Matrix & Architecture
 
-Status: draft for review. No implementation code written yet, per the
-"don't start coding until this analysis is complete" instruction.
+Status: Phase 1 analysis, plus Phases 2–8 implemented against the confirmed
+endpoint surface (see §8 below for what shipped and what's still gated on
+real documentation).
+
+## Critical bug found and fixed during implementation
+
+While wiring the new pages up to live data, every single call to the SLASH
+API was silently failing — confirmed by hitting `/vessels` directly with
+the real key and getting `404 page not found`, even though this is the most
+basic, most-verified endpoint in the codebase.
+
+**Root cause**: `.env`'s `STARLINK_API_BASE_URL` has a trailing slash
+(`https://slash-api.rudra.sh/api/v1/`). `lib/starlink/client.ts` built
+request URLs as `SLASH_API_BASE_URL + path` (e.g. `+ "/vessels"`), so the
+actual request went to `.../api/v1//vessels` — a double slash the API's
+router doesn't match, hence 404. Verified directly: the exact same request
+with the trailing slash stripped returns `200` with real vessel data.
+
+**Impact**: this means *any customer ever linked* to a real Starlink vessel
+via `User.starlinkVesselId` would have silently shown up with **zero
+terminals** in both the admin and customer portal — `liveProvider.ts`'s
+`safe()` wrapper caught the resulting error and returned `null`/`[]`
+exactly as designed for genuine API failures, so nothing crashed, but the
+live integration has likely never actually worked end-to-end until now.
+
+**Fix**: `lib/starlink/client.ts` now strips trailing slashes from the base
+URL before building request URLs, regardless of what's in `.env`. Verified
+live after the fix — see §8.
+
+## 0. Reality check — please read this first
 
 ## 0. Reality check — please read this first
 
@@ -253,18 +281,74 @@ existing, verified behavior, not a proposal:
 
 ---
 
-## 7. What I need from you to move past this
+## 7. Decisions on record
 
-1. **Is there a real SLASH API spec beyond `lib/starlink/`** (Postman
-   collection, OpenAPI/Swagger file, PDF, written doc from the client)?
-   If yes, please share it — that would upgrade most of the ❌ rows above
-   to buildable features instead of disabled placeholders. If no, I'll
-   proceed treating `lib/starlink/` as ground truth and build the ❌ items
-   as clearly-labeled "coming soon" states per your own §33 rule.
-2. Given the scope, I'd suggest going phase-by-phase with a short check-in
-   after each (Phase 2: split/extend the API client for confirmed domains;
-   Phase 3 is already mostly done — light RBAC extension only; Phase 4/5:
-   admin + portal pages; Phase 6: tracking/usage/alerts UI; Phase 7+:
-   reports/audit/hardening) rather than generating all ten phases unreviewed
-   in one pass, given how much of the later phases depend on the answer to
-   (1).
+You chose: treat `lib/starlink/` as ground truth (no fuller spec available),
+and build everything in one pass rather than phase-by-phase check-ins. What
+follows is what actually shipped under that decision.
+
+## 8. What was implemented (verified against the live API)
+
+**`lib/starlink/` restructure** — split into `vessels.ts`, `locations.ts`,
+`usage.ts`, `service-plans.ts`, `connectivity.ts`, `alerts.ts` (domain
+functions), plus new `schemas.ts` (Zod validation on every confirmed
+response shape, §38) and `validate.ts` (logs on drift instead of crashing).
+`client.ts` gained: retry/backoff on 429/5xx, in-flight GET de-duplication,
+per-call opt-in short caching (`revalidateSeconds`), and — critically — the
+trailing-slash fix above. `passthrough.ts` and its 19 write actions were
+left untouched.
+
+**Real command wiring** — `lib/terminals/service.ts`'s `sendTerminalCommand`
+now calls the real `reboot_user_terminal` passthrough action for REBOOT on
+live-linked terminals (confirmed endpoint), with a stronger confirm dialog
+and a "Live — sent to the real device" label in the UI. Every other command
+(Refresh Service, Suspend, Reactivate, Update Firmware, Diagnostics) stays
+local-only, labeled "Simulated — not supported by current API" (Suspend
+specifically notes it needs an `accountNumber` this app doesn't capture —
+`deactivate_service_line` exists but wasn't wired without that field and
+explicit sign-off, since it ends the service line rather than pausing it).
+
+**Admin**: `/admin` dashboard extended with a Fleet Overview section (total/
+online/offline/suspended, connectivity averages, usage breakdown, recent
+alerts) below the existing billing content — nothing existing was restyled.
+New pages: `/admin/alerts`, `/admin/tracking` (GPS map + history), `/admin/
+usage`, `/admin/analytics` (labeled app-computed), `/admin/reports` (export
+center). `/admin/terminals/[id]` gained a location map, a real freshness
+indicator, and an Audit History tab now sourced from `ActivityLog` (real)
+instead of only canned mock entries.
+
+**Customer portal**: new `/portal/devices/[id]` detail page (didn't exist
+before — the list only had cards), `/portal/tracking`, `/portal/alerts`,
+`/portal/reports`. Every query is scoped server-side to the logged-in
+customer — verified live: a customer hitting the admin export route gets
+`403`, and their own export route returns only their 1 terminal, not the
+fleet's 7.
+
+**Reports/export** (§31): `lib/reports/export.ts` + `rows.ts` generate CSV/
+JSON/Excel from already-fetched data for 5 report types × both portals.
+Verified live: all 15 admin combinations return `200` with correctly-typed,
+non-empty payloads (alerts report is legitimately empty — no alert data
+exists for this tenant).
+
+**GPS map**: no tile-based map library is wired in. `npm install leaflet
+react-leaflet` hit a reproducible npm registry integrity error in this
+environment (corrupted tarball bytes, same package, three separate retries)
+— not a real problem with the package, but couldn't be worked around here.
+`components/ui/LocationMap.tsx` is a dependency-free inline-SVG coordinate
+plot (graticule, markers, history trail, click-to-select) behind the same
+`points`/`trail`/`onSelectPoint` props a real Leaflet component would use,
+so swapping in real tiles later is a one-file change, not a re-plumb.
+**Action for you**: run `npm install leaflet react-leaflet@5` in a normal
+environment when convenient.
+
+**Env vars**: `SLASH_API_KEY` / `SLASH_API_BASE_URL` are now the preferred
+names (matching your spec), with `API_URL` / `STARLINK_API_BASE_URL` kept
+as fallbacks so the existing deployed `.env` keeps working unchanged.
+
+## 9. Still gated on real documentation
+
+Everything in §6 above is unchanged — telemetry, router alerts/inventory,
+connectivity/usage/plan history, fleet analytics endpoints, and most remote
+commands are still "not supported by current API" placeholders, not
+guesses. If you get a fuller spec from the client, the ❌ rows in §1 are
+where to start.

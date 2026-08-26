@@ -95,8 +95,8 @@ export function TerminalsPageClient({
         <div>
           <p className="text-2xl font-bold ">Terminals</p>
           <p className="text-sm">
-            Live fleet inventory, health, and remote management. Currently
-            backed by mock data — wire in the supplier API to make this live.
+            Live fleet inventory, health, and remote management. Customers linked to a
+            Starlink vessel show real SLASH API data; everyone else shows simulated data.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -108,6 +108,11 @@ export function TerminalsPageClient({
           <a href="/api/admin/terminals/export?format=json">
             <button className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-xs font-medium text-text-secondary hover:bg-surface-raised">
               <Download className="size-3.5" /> JSON
+            </button>
+          </a>
+          <a href="/api/admin/reports/export?type=inventory&format=xlsx">
+            <button className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-xs font-medium text-text-secondary hover:bg-surface-raised">
+              <Download className="size-3.5" /> Excel
             </button>
           </a>
         </div>
@@ -211,9 +216,16 @@ export function TerminalsPageClient({
                 return (
                   <TR key={t.id}>
                     <TD>
-                      <p className="font-medium text-text-primary">
-                        {t.identification.serialNumber}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-text-primary">
+                          {t.identification.serialNumber}
+                        </p>
+                        {t.sourceVesselId && (
+                          <Badge tone="blue" className="px-1.5 py-0.5 text-[10px]">
+                            Live
+                          </Badge>
+                        )}
+                      </div>
                       <p className="font-mono text-xs text-accent-green">
                         {t.identification.iccid}
                       </p>

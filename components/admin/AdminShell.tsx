@@ -12,6 +12,11 @@ import {
   UserCog,
   Settings as SettingsIcon,
   Bell,
+  AlertTriangle,
+  MapPin,
+  Gauge,
+  BarChart3,
+  FileDown,
 } from "lucide-react";
 import { AppShell, type NavItem } from "@/components/ui/AppShell";
 import { Avatar } from "@/components/ui/Avatar";
@@ -26,6 +31,11 @@ function baseNav(unreadSupportCount: number): NavItem[] {
     { label: "Service Plans", href: "/admin/plans", icon: Wifi },
     { label: "CDR Upload", href: "/admin/cdr-upload", icon: UploadCloud },
     { label: "Terminals", href: "/admin/terminals", icon: Satellite },
+    { label: "Tracking", href: "/admin/tracking", icon: MapPin },
+    { label: "Usage", href: "/admin/usage", icon: Gauge },
+    { label: "Alerts", href: "/admin/alerts", icon: AlertTriangle },
+    { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+    { label: "Reports", href: "/admin/reports", icon: FileDown },
     {
       label: "Support",
       href: "/admin/support",
