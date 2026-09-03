@@ -33,6 +33,22 @@ export default async function PortalProfilePage() {
         <p className="text-sm text-text-muted">Your account information and security settings.</p>
       </div>
 
+      {customer.mustChangePassword && (
+        <div className="rounded-xl border border-amber/30 bg-amber/10 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-amber/20 text-xs font-bold text-amber">
+              !
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Action Required: Update Your Password</p>
+              <p className="mt-0.5 text-xs text-text-secondary">
+                You are currently logged in with a temporary password. Please set a new permanent password below to secure your account.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="pt-5">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-accent-green">Account Information</p>

@@ -55,6 +55,9 @@ const UserSchema = new Schema(
     loginAttempts: { type: Number, default: 0 },
     lockedUntil: { type: Date, default: null },
 
+    mustChangePassword: { type: Boolean, default: false },
+    tempPasswordIssuedAt: { type: Date, default: null },
+
     address: { type: String, default: "" },
     company: { type: String, default: "" },
     avatarUrl: { type: String, default: "" },

@@ -5,12 +5,27 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Receipt, Download, Eye } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import {
+  TableContainer,
+  Table,
+  THead,
+  TBody,
+  TR,
+  TH,
+  TD,
+} from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { formatCurrency, formatDate, formatPeriodMonth } from "@/lib/utils/format";
+import {
+  formatCurrency,
+  formatDate,
+  formatPeriodMonth,
+} from "@/lib/utils/format";
 import type { PortalInvoiceRow } from "@/lib/types/portal";
 
-const STATUS_TONE: Record<PortalInvoiceRow["status"], "green" | "amber" | "red" | "neutral"> = {
+const STATUS_TONE: Record<
+  PortalInvoiceRow["status"],
+  "green" | "amber" | "red" | "neutral"
+> = {
   DRAFT: "neutral",
   SENT: "amber",
   DUE: "amber",
@@ -19,7 +34,13 @@ const STATUS_TONE: Record<PortalInvoiceRow["status"], "green" | "amber" | "red" 
   CANCELLED: "neutral",
 };
 
-export function PortalBillsClient({ rows, status }: { rows: PortalInvoiceRow[]; status: string }) {
+export function PortalBillsClient({
+  rows,
+  status,
+}: {
+  rows: PortalInvoiceRow[];
+  status: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -33,12 +54,17 @@ export function PortalBillsClient({ rows, status }: { rows: PortalInvoiceRow[]; 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <div>
           <p className="text-xl font-bold text-text-primary">My Bills</p>
           <p className="text-sm text-text-muted">Your full invoice history.</p>
         </div>
-        <Select value={status} onChange={(e) => updateStatus(e.target.value)} className="sm:w-44">
+
+        <Select
+          value={status}
+          onChange={(e) => updateStatus(e.target.value)}
+          className="w-[200px]"
+        >
           <option value="ALL">All statuses</option>
           <option value="DUE">Due</option>
           <option value="OVERDUE">Overdue</option>
@@ -47,7 +73,11 @@ export function PortalBillsClient({ rows, status }: { rows: PortalInvoiceRow[]; 
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState icon={Receipt} title="No bills yet" description="Your invoices will appear here." />
+        <EmptyState
+          icon={Receipt}
+          title="No bills yet"
+          description="Your invoices will appear here."
+        />
       ) : (
         <TableContainer>
           <Table>
@@ -65,10 +95,16 @@ export function PortalBillsClient({ rows, status }: { rows: PortalInvoiceRow[]; 
             <TBody>
               {rows.map((inv) => (
                 <TR key={inv.id}>
-                  <TD className="font-medium text-text-primary">{inv.invoiceNumber}</TD>
+                  <TD className="font-medium text-text-primary">
+                    {inv.invoiceNumber}
+                  </TD>
                   <TD>{formatPeriodMonth(inv.periodMonth)}</TD>
-                  <TD className="text-text-secondary">{formatDate(inv.issueDate)}</TD>
-                  <TD className="text-text-secondary">{formatDate(inv.dueDate)}</TD>
+                  <TD className="text-text-secondary">
+                    {formatDate(inv.issueDate)}
+                  </TD>
+                  <TD className="text-text-secondary">
+                    {formatDate(inv.dueDate)}
+                  </TD>
                   <TD>{formatCurrency(inv.total, inv.currency)}</TD>
                   <TD>
                     <Badge tone={STATUS_TONE[inv.status]}>{inv.status}</Badge>

@@ -120,6 +120,7 @@ function activityMeta(action: string, meta: Record<string, unknown>): { icon: ty
 
 export function OverviewClient({
   customerName,
+  mustChangePassword,
   currentBill,
   plan,
   usage,
@@ -129,6 +130,7 @@ export function OverviewClient({
   activity,
 }: {
   customerName: string;
+  mustChangePassword?: boolean;
   currentBill: PortalInvoiceRow | null;
   plan: PortalPlanInfo | null;
   usage: PortalUsageInfo | null;
@@ -159,6 +161,28 @@ export function OverviewClient({
 
   return (
     <div className="space-y-6">
+      {mustChangePassword && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber/30 bg-amber/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber/20 text-xs font-bold text-amber">
+              !
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Temporary Password in Use</p>
+              <p className="text-xs text-text-secondary">
+                You are currently logged in with temporary credentials. Please set your own password.
+              </p>
+            </div>
+          </div>
+          <Link href="/portal/profile">
+            <Button size="sm" variant="outline" className="border-amber/40 text-amber hover:bg-amber/10">
+              Update Password
+              <ArrowRight className="size-3.5" />
+            </Button>
+          </Link>
+        </div>
+      )}
+
       <div>
         <p className="text-xl font-bold text-text-primary">
           Welcome back, <span className="text-accent-green">{firstName}</span>

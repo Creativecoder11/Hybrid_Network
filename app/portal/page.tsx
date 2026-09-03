@@ -78,6 +78,7 @@ export default async function PortalOverviewPage({
   return (
     <OverviewClient
       customerName={user.name}
+      mustChangePassword={user.mustChangePassword}
       currentBill={currentBill}
       plan={plan}
       usage={usage}

@@ -8,6 +8,7 @@ import { detectRatedCdrFormat, parseRatedCdrSheet } from "./ratedCdrParser";
 import { parseGenericSheet } from "./genericParser";
 import { buildCustomerMatchMaps, matchCustomer } from "./matcher";
 import { groupByCustomerPeriod, upsertUsageRecords, type MatchedCdrRow } from "./aggregator";
+import { processTemporaryCredentialsForCustomers } from "@/lib/auth/temporaryCredentials";
 import type { ParsedCdrRow } from "./types";
 
 export type CdrUploadResult = {
@@ -19,6 +20,7 @@ export type CdrUploadResult = {
   unmatchedRows: number;
   skippedRows: number;
   periodsUpdated: number;
+  credentialsDispatched?: number;
   errorLog: string[];
 };
 
@@ -206,6 +208,12 @@ export async function processCdrUpload(params: {
 
     await refreshCustomerSnapshots(matchedRows);
 
+    const matchedCustomerIds = Array.from(new Set(matchedRows.map((r) => r.customerId)));
+    const { dispatchedCount } = await processTemporaryCredentialsForCustomers(matchedCustomerIds, {
+      actorId: params.uploadedBy,
+      reason: "CDR_UPLOAD",
+    });
+
     const unmatchedCount = parseResult.rows.length - matchedRows.length;
     const provider = parseResult.rows[0]?.vendor || (parseResult.format === "RATED_CDR" ? "Starlink" : "Unknown");
 
@@ -230,6 +238,7 @@ export async function processCdrUpload(params: {
         totalRows: parseResult.totalDataRows,
         matchedRows: matchedRows.length,
         unmatchedRows: unmatchedCount,
+        credentialsDispatched: dispatchedCount,
       },
     });
 
@@ -242,6 +251,7 @@ export async function processCdrUpload(params: {
       unmatchedRows: unmatchedCount,
       skippedRows: parseResult.skippedRows,
       periodsUpdated,
+      credentialsDispatched: dispatchedCount,
       errorLog,
     };
   } catch (err) {

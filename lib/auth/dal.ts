@@ -27,6 +27,7 @@ export const getCurrentUser = cache(async () => {
     status: user.status,
     customerId: user.customerId ?? null,
     avatarUrl: user.avatarUrl ?? "",
+    mustChangePassword: Boolean(user.mustChangePassword),
   };
 });
 

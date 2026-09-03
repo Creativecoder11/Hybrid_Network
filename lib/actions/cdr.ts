@@ -65,6 +65,12 @@ export async function assignUnmatchedRecordAction(
     meta: { event: "MANUAL_ASSIGN", recordId, period: record.period },
   });
 
+  const { processTemporaryCredentialsForCustomers } = await import("@/lib/auth/temporaryCredentials");
+  await processTemporaryCredentialsForCustomers([customer._id], {
+    actorId: admin.id,
+    reason: "MANUAL_CDR_ASSIGN",
+  });
+
   revalidatePath(`/admin/cdr-upload/${record.cdrBatch.toString()}`);
   revalidatePath(`/admin/customers/${customer._id.toString()}`);
   return { success: `Assigned to ${customer.name}.` };

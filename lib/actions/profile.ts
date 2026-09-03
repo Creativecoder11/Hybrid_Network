@@ -36,6 +36,7 @@ export async function changePasswordAction(
   if (!valid) return { error: "Your current password is incorrect." };
 
   dbUser.passwordHash = await hashPassword(parsed.data.newPassword);
+  dbUser.mustChangePassword = false;
   await dbUser.save();
 
   await ActivityLog.create({ actor: user.id, action: "PASSWORD_RESET", meta: { event: "SELF_CHANGE" } });

@@ -269,6 +269,17 @@ export async function processRetailCdrImport(params: {
       await CdrChargeRecord.insertMany(docs, { ordered: false });
     }
 
+    const matchedCustomerIds = docs
+      .map((d) => d.customer)
+      .filter((c): c is Types.ObjectId => Boolean(c));
+    if (matchedCustomerIds.length > 0) {
+      const { processTemporaryCredentialsForCustomers } = await import("@/lib/auth/temporaryCredentials");
+      await processTemporaryCredentialsForCustomers(matchedCustomerIds, {
+        actorId: params.uploadedBy,
+        reason: "CDR_PRICING_IMPORT",
+      });
+    }
+
     const processedRows = matchedRows + unmatchedRows;
     const totalWholesaleAmount = fromCents(totalWholesaleCents);
     const totalRetailAmount = fromCents(totalRetailCents);
