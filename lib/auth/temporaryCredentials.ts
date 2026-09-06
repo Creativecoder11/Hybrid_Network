@@ -69,7 +69,7 @@ export async function sendTemporaryCredentialsToCustomer(
     user.lockedUntil = null;
     await user.save();
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login`;
+    const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login`;
 
     await sendMail({
       to: user.email,

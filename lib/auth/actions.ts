@@ -173,7 +173,10 @@ export async function forgotPasswordAction(
     user.resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
     await user.save();
 
-    const actionUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password/${rawToken}`;
+    const baseUrl = user.role === "CUSTOMER"
+      ? (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+      : (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+    const actionUrl = `${baseUrl}/reset-password/${rawToken}`;
     await sendMail({
       to: user.email,
       subject: "Reset your Hybrid Networks password",

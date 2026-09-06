@@ -401,7 +401,7 @@ export async function bulkSendRemindersAction(invoiceIds: string[]): Promise<Act
     const customer = await User.findById(invoice.customer);
     if (!customer) continue;
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/bills/${invoice._id.toString()}`;
+    const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoice._id.toString()}`;
     await sendMail({
       to: customer.email,
       subject: `Payment reminder: Invoice ${invoice.invoiceNumber}`,
