@@ -85,6 +85,21 @@ export async function loginAction(
     return { error: "Invalid email/ID or password." };
   }
 
+  const portalMode = process.env.PORTAL_MODE;
+  if (portalMode === "admin" && user.role === "CUSTOMER") {
+    return {
+      error:
+        "Access restricted: Customer accounts cannot sign in to the Admin Portal. Please use the Customer Portal.",
+    };
+  }
+
+  if (portalMode === "customer" && user.role !== "CUSTOMER") {
+    return {
+      error:
+        "Access restricted: Administrator / Staff accounts cannot sign in to the Customer Portal. Please use the Admin Portal.",
+    };
+  }
+
   await User.updateOne({ _id: user._id }, { loginAttempts: 0, lockedUntil: null });
   await createSession(user._id.toString(), user.role, parsed.data.keepSignedIn);
   await ActivityLog.create({ actor: user._id, action: "LOGIN" });
