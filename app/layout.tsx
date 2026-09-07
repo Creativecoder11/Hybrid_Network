@@ -11,7 +11,23 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Hybrid Networks Portal",
   description: "ISP distributor billing, usage-tracking, and customer-management platform.",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
+
+// Render every page at request time (no build-time prerendering). Two reasons:
+// 1. The hosting CDN honours the `s-maxage=31536000` header Next sends for
+//    prerendered HTML, so after a redeploy it kept serving the previous
+//    build's /login HTML, which points at JS chunks the new build no longer
+//    ships -> ChunkLoadError -> the "Something went wrong" error boundary.
+//    Dynamic pages are sent with `no-store`, so nothing upstream can hold on
+//    to stale HTML across deploys.
+// 2. PORTAL_MODE / ADMIN_PORTAL_URL / CUSTOMER_PORTAL_URL are set in the
+//    hosting panel, not in the shell that runs `npm run build`. Reading them
+//    per request (instead of baking them into a prerender) is what the
+//    deployment docs already assume.
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({
   children,
@@ -19,8 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} dark`}>
-      <body className="min-h-screen bg-bg text-text-primary antialiased">
+    <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
+      <body className="min-h-screen bg-bg text-text-primary antialiased" suppressHydrationWarning>
         {children}
         <Toaster
           theme="dark"

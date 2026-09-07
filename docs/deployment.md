@@ -166,14 +166,11 @@ app screen for each app, click **Restart**. Hostinger's Node.js app runner
 (Passenger) is what actually executes `server.js` after that — you don't
 run `node server.js` yourself.
 
-If a build step needs an env var that's only set in hPanel's Node.js panel
-(not your shell), export it manually before building, e.g.:
-```bash
-export MONGODB_URI="mongodb+srv://..."
-npm run build
-```
-(This build doesn't actually hit the database at build time — Next.js only
-needs `MONGODB_URI` at request time — but harmless to have it set.)
+The build does not need any of the environment variables. Every page is
+rendered at request time (`export const dynamic = "force-dynamic"` in
+`app/layout.tsx`), so `PORTAL_MODE`, the portal URLs and `MONGODB_URI` are
+all read from hPanel's environment when a request arrives, not baked in at
+build time. Nothing has to be `export`ed in the shell before `npm run build`.
 
 ## 7. SSL
 
@@ -211,7 +208,10 @@ git pull
 npm install    # only needed if package.json changed
 npm run build
 ```
-Then **Restart** that app in hPanel's Node.js screen.
+Then **Restart** that app in hPanel's Node.js screen, and if Hostinger's CDN
+is enabled for the subdomain, purge it (hPanel → Websites → the site →
+Performance → CDN → **Purge cache**) so no edge keeps a copy of the previous
+build's pages.
 
 ## 10. Common issues
 
@@ -229,3 +229,10 @@ Then **Restart** that app in hPanel's Node.js screen.
   app's directory. Each subdomain is a fully separate `git clone` /
   `node_modules` / `.next` — there's no shared state between them except
   the database.
+- **"Something went wrong" on `/login` right after a deploy**, and the
+  browser console shows `ChunkLoadError: Failed to load chunk
+  /_next/static/chunks/….js` — a cache in front of the app (Hostinger's
+  CDN) is still serving the previous build's HTML, which references JS
+  chunks the new build no longer contains. Purge the CDN cache (§9) and
+  Restart the app. Pages are served with `no-store` now, so this only
+  happens for copies cached before that change was deployed.

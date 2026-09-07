@@ -44,7 +44,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               <h2 className="mt-4 text-5xl font-extrabold leading-tight text-text-primary">
                 Enterprise Network <br />&amp; Billing Operations.
               </h2>
-              <p className="mt-4 text-lg leading-relaxed text-slate-300">
+              <p className="mt-4 text-lg leading-relaxed  text-slate-300">
                 Full administrative control over customer fleets, Starlink telemetry,
                 service plans, automated invoices, and system security.
               </p>
@@ -61,7 +61,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             </>
           ) : (
             <>
-              <h2 className="mt-4 text-5xl font-extrabold leading-tight text-text-primary">
+              <h2 className="mt-4 text-5xl font-bold leading-tight text-text-primary">
                 Run your network&apos;s <br />billing like clockwork.
               </h2>
               <p className="mt-4 text-lg leading-relaxed text-slate-300">
