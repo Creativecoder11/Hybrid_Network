@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isValidObjectId } from "mongoose";
 import { ArrowLeft, Download } from "lucide-react";
 import { connectDB } from "@/lib/db/connect";
 import { Invoice } from "@/models/Invoice";
-import { requireRole } from "@/lib/auth/dal";
+import { Settings } from "@/models/Settings";
+import { getPortalContext, canAccessAccount } from "@/lib/accounts/access";
+import { CUSTOMER_VISIBLE_STATUSES } from "@/lib/portal/billing";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -24,13 +27,36 @@ const STATUS_TONE: Record<string, "green" | "amber" | "red" | "neutral"> = {
   CANCELLED: "neutral",
 };
 
+function periodRange(periodMonth: string): string {
+  const year = Number(periodMonth.slice(0, 4));
+  const month = Number(periodMonth.slice(4, 6));
+  if (!year || !month) return formatPeriodMonth(periodMonth);
+  const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${fmt.format(new Date(Date.UTC(year, month - 1, 1)))} – ${fmt.format(new Date(Date.UTC(year, month, 0)))}`;
+}
+
 export default async function PortalBillDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireRole(["CUSTOMER"], "/admin");
+  const ctx = await getPortalContext();
   const { id } = await params;
+  if (!isValidObjectId(id)) notFound();
 
   await connectDB();
-  const invoice = await Invoice.findById(id).lean();
-  if (!invoice || invoice.customer.toString() !== user.id) notFound();
+  const [invoice, settings] = await Promise.all([
+    Invoice.findById(id).lean(),
+    Settings.findOne({ key: "GLOBAL" }).select("companyName companyLegalName companyAbn").lean(),
+  ]);
+  // Server-side ownership: the invoice's account must be one of this user's
+  // authorized accounts, and drafts are never shown to customers.
+  if (
+    !invoice ||
+    !canAccessAccount(ctx, invoice.customerAccount?.toString()) ||
+    !CUSTOMER_VISIBLE_STATUSES.includes(invoice.status)
+  ) {
+    notFound();
+  }
+
+  const amountPaid = invoice.status === "PAID" ? invoice.total : 0;
+  const balanceDue = invoice.status === "PAID" || invoice.status === "CANCELLED" ? 0 : invoice.total;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -44,11 +70,15 @@ export default async function PortalBillDetailPage({ params }: { params: Promise
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Tax Invoice</p>
           <div className="flex items-center gap-3">
             <p className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</p>
             <Badge tone={STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
           </div>
-          <p className="mt-1 text-sm text-text-muted">{formatPeriodMonth(invoice.periodMonth)}</p>
+          <p className="mt-1 text-sm text-text-muted">
+            {settings?.companyLegalName || settings?.companyName || "Hybrid Networks"}
+            {settings?.companyAbn ? ` · ABN ${settings.companyAbn}` : ""}
+          </p>
         </div>
         <a href={`/api/invoices/${invoice._id.toString()}/pdf`} target="_blank" rel="noreferrer">
           <Button variant="outline">
@@ -58,19 +88,23 @@ export default async function PortalBillDetailPage({ params }: { params: Promise
         </a>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card className="p-4">
-          <p className="text-xs text-text-muted">Issue Date</p>
+          <p className="text-xs text-text-muted">Account No.</p>
+          <p className="mt-1 font-mono text-sm font-medium text-text-primary">{invoice.accountNumber || "--"}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-text-muted">Billing Period</p>
+          <p className="mt-1 text-sm font-medium text-text-primary">{periodRange(invoice.periodMonth)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-text-muted">Invoice Date</p>
           <p className="mt-1 text-sm font-medium text-text-primary">{formatDate(invoice.issueDate)}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-text-muted">Due Date</p>
-          <p className="mt-1 text-sm font-medium text-text-primary">{formatDate(invoice.dueDate)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-text-muted">{invoice.paidDate ? "Paid Date" : "Total Due"}</p>
+          <p className="text-xs text-text-muted">{invoice.paidDate ? "Paid Date" : "Due Date"}</p>
           <p className="mt-1 text-sm font-medium text-text-primary">
-            {invoice.paidDate ? formatDate(invoice.paidDate) : formatCurrency(invoice.total, invoice.currency)}
+            {formatDate(invoice.paidDate ?? invoice.dueDate)}
           </p>
         </Card>
       </div>
@@ -103,7 +137,7 @@ export default async function PortalBillDetailPage({ params }: { params: Promise
       <div className="flex justify-end">
         <div className="w-full max-w-xs space-y-2">
           <div className="flex justify-between text-sm text-text-secondary">
-            <span>Subtotal</span>
+            <span>Subtotal (excl. {invoice.taxLabel})</span>
             <span>{formatCurrency(invoice.subtotal, invoice.currency)}</span>
           </div>
           <div className="flex justify-between text-sm text-text-secondary">
@@ -113,8 +147,16 @@ export default async function PortalBillDetailPage({ params }: { params: Promise
             <span>{formatCurrency(invoice.taxAmount, invoice.currency)}</span>
           </div>
           <div className="flex justify-between border-t border-line pt-2 text-base font-semibold text-text-primary">
-            <span>Total</span>
+            <span>Total (incl. {invoice.taxLabel})</span>
             <span>{formatCurrency(invoice.total, invoice.currency)}</span>
+          </div>
+          <div className="flex justify-between text-sm text-text-secondary">
+            <span>Amount paid</span>
+            <span>{formatCurrency(amountPaid, invoice.currency)}</span>
+          </div>
+          <div className="flex justify-between text-sm font-semibold text-text-primary">
+            <span>Balance due</span>
+            <span>{formatCurrency(balanceDue, invoice.currency)}</span>
           </div>
         </div>
       </div>

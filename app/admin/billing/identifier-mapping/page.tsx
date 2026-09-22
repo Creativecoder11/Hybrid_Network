@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db/connect";
 import { CdrIdentifierMapping } from "@/models/CdrIdentifierMapping";
 import { RetailPlan, type RetailPlanDoc } from "@/models/RetailPlan";
 import { CdrChargeRecord } from "@/models/CdrChargeRecord";
+import { CdrRecord } from "@/models/CdrRecord";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { formatCurrency } from "@/lib/utils/format";
 import { BillingSubNav } from "@/components/admin/BillingSubNav";
@@ -10,7 +11,7 @@ import { IdentifierMappingPageClient, type UnmappedIdentifierRow } from "@/compo
 import type { CdrIdentifierMappingRow } from "@/lib/types/retailBilling";
 
 export const metadata: Metadata = {
-  title: "Identifier Mapping | Hybrid Networks Admin",
+  title: "Product Codes | Hybrid Networks Admin",
 };
 
 function pricingValueLabel(plan: Pick<RetailPlanDoc, "pricingMethod" | "markupPercent" | "fixedPrice" | "currency">): string {
@@ -19,15 +20,16 @@ function pricingValueLabel(plan: Pick<RetailPlanDoc, "pricingMethod" | "markupPe
     : `${formatCurrency(plan.fixedPrice, plan.currency)} fixed`;
 }
 
-export default async function IdentifierMappingPage() {
+export default async function ProductCodesPage() {
   await connectDB();
 
-  const [mappingDocs, retailPlans, currentUser, unmatchedAgg] = await Promise.all([
-    CdrIdentifierMapping.find().populate<{ retailPlan: RetailPlanDoc & { _id: unknown } }>("retailPlan").sort({ updatedAt: -1 }).lean(),
+  const [mappingDocs, retailPlans, currentUser, unknownCharges, unknownUsage] = await Promise.all([
+    CdrIdentifierMapping.find().populate<{ retailPlan: (RetailPlanDoc & { _id: unknown }) | null }>("retailPlan").sort({ isActive: -1, identifier: 1 }).lean(),
     RetailPlan.find().sort({ name: 1 }).lean(),
     getCurrentUser(),
+    // Product codes seen on unallocated records in either CDR pipeline.
     CdrChargeRecord.aggregate([
-      { $match: { status: "UNMATCHED" } },
+      { $match: { status: "UNMATCHED", unallocatedReasonCode: { $in: ["PRODUCT_CODE_NOT_FOUND", "PRODUCT_INACTIVE", "PRODUCT_HAS_NO_PRICING", null] } } },
       {
         $group: {
           _id: "$identifier",
@@ -39,49 +41,62 @@ export default async function IdentifierMappingPage() {
       { $sort: { recordCount: -1 } },
       { $limit: 100 },
     ]),
+    CdrRecord.aggregate([
+      { $match: { allocationStatus: "UNALLOCATED", unallocatedReasonCode: { $in: ["PRODUCT_CODE_NOT_FOUND", "PRODUCT_INACTIVE"] } } },
+      { $group: { _id: "$prod", recordCount: { $sum: 1 } } },
+      { $sort: { recordCount: -1 } },
+      { $limit: 100 },
+    ]),
   ]);
 
-  const mappings: CdrIdentifierMappingRow[] = mappingDocs
-    .filter((m) => m.retailPlan)
-    .map((m) => {
-      const plan = m.retailPlan;
-      return {
-        id: m._id.toString(),
-        identifier: m.identifier,
-        retailPlanId: (plan._id as { toString(): string }).toString(),
-        retailPlanName: plan.name,
-        retailPlanActive: plan.isActive,
-        pricingMethod: plan.pricingMethod,
-        pricingValueLabel: pricingValueLabel(plan),
-        isActive: m.isActive,
-        createdAt: (m.createdAt as Date).toISOString(),
-        updatedAt: (m.updatedAt as Date).toISOString(),
-      };
-    });
+  const mappings: CdrIdentifierMappingRow[] = mappingDocs.map((m) => {
+    const plan = m.retailPlan;
+    return {
+      id: m._id.toString(),
+      identifier: m.identifier,
+      name: m.name || "",
+      productType: m.productType ?? "OTHER",
+      category: m.category ?? "",
+      description: m.description ?? "",
+      retailPlanId: plan ? (plan._id as { toString(): string }).toString() : "",
+      retailPlanName: plan?.name ?? "",
+      retailPlanActive: plan?.isActive ?? false,
+      pricingMethod: plan?.pricingMethod ?? null,
+      pricingValueLabel: plan ? pricingValueLabel(plan) : "No pricing rule",
+      isActive: m.isActive,
+      createdAt: (m.createdAt as Date).toISOString(),
+      updatedAt: (m.updatedAt as Date).toISOString(),
+    };
+  });
 
-  const activeIdentifiers = new Set(mappings.filter((m) => m.isActive).map((m) => m.identifier.trim().toLowerCase()));
-  const unmapped: UnmappedIdentifierRow[] = unmatchedAgg
-    .filter((u) => !activeIdentifiers.has(String(u._id).trim().toLowerCase()))
-    .map((u) => ({
-      identifier: u._id,
+  const activeCodes = new Set(mappings.filter((m) => m.isActive).map((m) => m.identifier.trim().toLowerCase()));
+  const unmappedByCode = new Map<string, UnmappedIdentifierRow>();
+  for (const u of unknownCharges) {
+    const code = String(u._id ?? "").trim();
+    if (!code) continue;
+    unmappedByCode.set(code.toLowerCase(), {
+      identifier: code,
       recordCount: u.recordCount,
       totalWholesaleAmount: Math.round((u.totalWholesaleAmount ?? 0) * 100) / 100,
       currency: u.currency ?? "USD",
-    }));
-
-  const retailPlanOptions = retailPlans.map((p) => ({
-    id: p._id.toString(),
-    name: p.name,
-    isActive: p.isActive,
-  }));
+      hasPricingOnly: activeCodes.has(code.toLowerCase()),
+    });
+  }
+  for (const u of unknownUsage) {
+    const code = String(u._id ?? "").trim();
+    if (!code || activeCodes.has(code.toLowerCase())) continue;
+    const existing = unmappedByCode.get(code.toLowerCase());
+    if (existing) existing.recordCount += u.recordCount;
+    else unmappedByCode.set(code.toLowerCase(), { identifier: code, recordCount: u.recordCount, totalWholesaleAmount: 0, currency: "", hasPricingOnly: false });
+  }
 
   return (
     <div className="space-y-6">
       <BillingSubNav />
       <IdentifierMappingPageClient
         mappings={mappings}
-        unmapped={unmapped}
-        retailPlans={retailPlanOptions}
+        unmapped={Array.from(unmappedByCode.values()).sort((a, b) => b.recordCount - a.recordCount)}
+        retailPlans={retailPlans.map((p) => ({ id: p._id.toString(), name: p.name, isActive: p.isActive }))}
         canDelete={currentUser?.role === "SUPER_ADMIN"}
       />
     </div>

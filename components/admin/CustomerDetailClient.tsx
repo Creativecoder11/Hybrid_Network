@@ -12,6 +12,11 @@ import {
   ArrowLeft,
   Wifi,
   Radio,
+  Plus,
+  Building2,
+  UserPlus,
+  KeyRound,
+  Satellite,
 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -22,6 +27,8 @@ import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CustomerFormModal } from "@/components/admin/CustomerFormModal";
 import { UsageHistoryEditModal } from "@/components/admin/UsageHistoryEditModal";
+import { CustomerAccountFormModal } from "@/components/admin/CustomerAccountFormModal";
+import { PortalUserModal } from "@/components/admin/PortalUserModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import {
   deleteCustomerAction,
@@ -29,20 +36,34 @@ import {
   suspendCustomerAction,
   reactivateCustomerAction,
 } from "@/lib/actions/customers";
+import { deleteCustomerAccountAction } from "@/lib/actions/accounts";
+import {
+  deletePortalUserAction,
+  reinvitePortalUserAction,
+  setPortalUserSuspendedAction,
+} from "@/lib/actions/portalUsers";
 import { displayOrDash, formatCurrency, formatDate, formatDateTime, formatPeriodMonth } from "@/lib/utils/format";
 import type {
   ActivityLogRow,
   CdrRecordRow,
+  CustomerAccountRow,
   CustomerDetail,
   InvoiceRow,
   PlanOption,
+  PortalUserRow,
   UsageHistoryRow,
 } from "@/lib/types/admin";
 
 const STATUS_LABEL: Record<CustomerDetail["status"], string> = {
   ACTIVE: "Active",
   SUSPENDED: "Suspended",
-  INVITED: "Inactive",
+  INVITED: "Invited",
+};
+
+const ACCOUNT_TONE: Record<CustomerAccountRow["status"], "green" | "amber" | "neutral"> = {
+  ACTIVE: "green",
+  SUSPENDED: "amber",
+  CLOSED: "neutral",
 };
 const STATUS_TONE: Record<CustomerDetail["status"], "green" | "amber" | "red"> = {
   ACTIVE: "green",
@@ -88,6 +109,8 @@ function ActionButton({
 
 export function CustomerDetailClient({
   customer,
+  accounts,
+  portalUsers,
   usageHistory,
   invoices,
   cdrRecords,
@@ -96,6 +119,8 @@ export function CustomerDetailClient({
   canDelete,
 }: {
   customer: CustomerDetail;
+  accounts: CustomerAccountRow[];
+  portalUsers: PortalUserRow[];
   usageHistory: UsageHistoryRow[];
   invoices: InvoiceRow[];
   cdrRecords: CdrRecordRow[];
@@ -105,7 +130,10 @@ export function CustomerDetailClient({
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
-  const [editingUsage, setEditingUsage] = useState<UsageHistoryRow | null>(null);
+  const [editingUsage, setEditingUsage] = useState<UsageHistoryRow | "new" | null>(null);
+  const [editingAccount, setEditingAccount] = useState<CustomerAccountRow | "new" | null>(null);
+  const [editingUser, setEditingUser] = useState<PortalUserRow | "new" | null>(null);
+  const accountNumberById = new Map(accounts.map((a) => [a.id, a.accountNumber]));
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -146,11 +174,11 @@ export function CustomerDetailClient({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <p className="text-xl font-bold">{customer.name}</p>
+            <p className="text-xl font-bold">{customer.company || customer.name}</p>
             <Badge tone={STATUS_TONE[customer.status]}>{STATUS_LABEL[customer.status]}</Badge>
           </div>
           <span className="mt-1 text-sm text-text-muted">
-            {customer.customerId} {customer.customerCode && `· ${customer.customerCode}`} · {customer.email}
+            {customer.customerId} · {accounts.length} account{accounts.length === 1 ? "" : "s"} · {customer.email}
           </span>
         </div>
         <Button onClick={() => setEditOpen(true)}>
@@ -177,14 +205,13 @@ export function CustomerDetailClient({
                     <InfoRow label="Phone" value={customer.phone} />
                     <InfoRow label="Address" value={customer.address} />
                     <InfoRow label="Company" value={customer.company} />
-                    <InfoRow label="Customer Code" value={customer.customerCode} />
+                    <InfoRow label="Primary Contact" value={customer.name} />
+                    <InfoRow label="Customer Accounts" value={customer.accountNumbers.join(", ")} />
                     <InfoRow label="Card Name" value={customer.cardName} />
                     <InfoRow label="ICCID" value={customer.iccid} />
                     <InfoRow label="IMEI" value={customer.imei} />
                     <InfoRow label="Service" value={customer.service} />
                     <InfoRow label="Vendor" value={customer.vendor} />
-                    <InfoRow label="Starlink Vessel ID" value={customer.starlinkVesselId} />
-                    <InfoRow label="Starlink Service Line" value={customer.starlinkServiceLineNumber} />
                   </CardContent>
                 </Card>
                 <Card>
@@ -238,6 +265,197 @@ export function CustomerDetailClient({
             ),
           },
           {
+            key: "accounts",
+            label: `Accounts (${accounts.length})`,
+            content: (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-text-muted">
+                    Each account number is a Customer Code used to allocate CDR records. Devices, plans, usage and bills
+                    are kept per account.
+                  </p>
+                  <Button size="sm" onClick={() => setEditingAccount("new")}>
+                    <Plus className="size-4" />
+                    Add Account
+                  </Button>
+                </div>
+                {accounts.length === 0 ? (
+                  <EmptyState
+                    icon={Building2}
+                    title="No Customer Accounts"
+                    description="Add the customer's account number(s). CDR records with an unknown Customer Code stay unallocated until the account exists."
+                  />
+                ) : (
+                  <TableContainer>
+                    <Table>
+                      <THead>
+                        <TR>
+                          <TH>Account Number</TH>
+                          <TH>Name</TH>
+                          <TH>Starlink Vessels</TH>
+                          <TH>Plan</TH>
+                          <TH>Bills</TH>
+                          <TH>Status</TH>
+                          <TH className="text-right">Actions</TH>
+                        </TR>
+                      </THead>
+                      <TBody>
+                        {accounts.map((a) => (
+                          <TR key={a.id}>
+                            <TD className="font-mono font-medium text-text-primary">{a.accountNumber}</TD>
+                            <TD>{displayOrDash(a.name)}</TD>
+                            <TD>
+                              {a.starlinkVesselIds.length === 0 ? (
+                                <span className="text-xs text-text-muted">None linked</span>
+                              ) : (
+                                <span className="flex items-center gap-1.5 text-xs">
+                                  <Satellite className="size-3.5 text-accent-green" />
+                                  {a.starlinkVesselIds.length} vessel{a.starlinkVesselIds.length === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </TD>
+                            <TD>{a.planName ? <Badge tone="blue">{a.planName}</Badge> : <span className="text-text-muted">--</span>}</TD>
+                            <TD>{a.invoiceCount}</TD>
+                            <TD>
+                              <Badge tone={ACCOUNT_TONE[a.status]}>{a.status}</Badge>
+                            </TD>
+                            <TD className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => setEditingAccount(a)}
+                                  className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-accent-blue"
+                                  aria-label={`Edit account ${a.accountNumber}`}
+                                >
+                                  <Pencil className="size-4" />
+                                </button>
+                                {canDelete && (
+                                  <button
+                                    onClick={() => runAction(`delete-account-${a.id}`, () => deleteCustomerAccountAction(a.id))}
+                                    disabled={pendingAction === `delete-account-${a.id}`}
+                                    className="rounded-lg p-1.5 text-text-muted hover:bg-red/10 hover:text-red disabled:opacity-50"
+                                    aria-label={`Delete account ${a.accountNumber}`}
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </TD>
+                          </TR>
+                        ))}
+                      </TBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "users",
+            label: `Portal Users (${portalUsers.length})`,
+            content: (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-text-muted">
+                    Logins for this customer&apos;s staff. Each user only sees the accounts assigned to them.
+                  </p>
+                  <Button size="sm" onClick={() => setEditingUser("new")} disabled={customer.status === "SUSPENDED"}>
+                    <UserPlus className="size-4" />
+                    Invite User
+                  </Button>
+                </div>
+                <TableContainer>
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH>User</TH>
+                        <TH>Account Access</TH>
+                        <TH>Status</TH>
+                        <TH>Last Sign-in</TH>
+                        <TH className="text-right">Actions</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {portalUsers.map((u) => {
+                        const invitationExpired = u.invitationExpired;
+                        return (
+                          <TR key={u.id}>
+                            <TD>
+                              <p className="font-medium text-text-primary">
+                                {u.name} {u.isPrimary && <span className="ml-1 text-xs font-normal text-accent-green">Primary</span>}
+                              </p>
+                              <p className="text-xs text-text-muted">{u.email}</p>
+                            </TD>
+                            <TD className="text-xs">
+                              {u.accountAccessAll
+                                ? "All accounts"
+                                : u.accountAccess.map((id) => accountNumberById.get(id) ?? "?").join(", ") || "None"}
+                            </TD>
+                            <TD>
+                              <Badge tone={u.status === "ACTIVE" ? "green" : u.status === "SUSPENDED" ? "amber" : invitationExpired ? "red" : "blue"}>
+                                {u.status === "INVITED" ? (invitationExpired ? "Invite expired" : "Invited") : u.status === "ACTIVE" ? "Active" : "Suspended"}
+                              </Badge>
+                            </TD>
+                            <TD className="text-xs text-text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "Never"}</TD>
+                            <TD>
+                              <div className="flex flex-wrap items-center justify-end gap-1">
+                                <button
+                                  onClick={() => setEditingUser(u)}
+                                  className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-accent-blue"
+                                  aria-label={`Edit account access for ${u.name}`}
+                                  title="Account access"
+                                >
+                                  <KeyRound className="size-4" />
+                                </button>
+                                {(u.status === "INVITED" || u.mustChangePassword) && (
+                                  <button
+                                    onClick={() => runAction(`reinvite-${u.id}`, () => reinvitePortalUserAction(u.id))}
+                                    disabled={pendingAction === `reinvite-${u.id}`}
+                                    className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-accent-green disabled:opacity-50"
+                                    aria-label={`Re-send invitation to ${u.name}`}
+                                    title="Re-send invitation"
+                                  >
+                                    <Mail className="size-4" />
+                                  </button>
+                                )}
+                                {!u.isPrimary && (
+                                  <button
+                                    onClick={() =>
+                                      runAction(`suspend-${u.id}`, () => setPortalUserSuspendedAction(u.id, u.status !== "SUSPENDED"))
+                                    }
+                                    disabled={pendingAction === `suspend-${u.id}`}
+                                    className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-amber disabled:opacity-50"
+                                    aria-label={u.status === "SUSPENDED" ? `Reactivate ${u.name}` : `Suspend ${u.name}`}
+                                    title={u.status === "SUSPENDED" ? "Reactivate" : "Suspend"}
+                                  >
+                                    {u.status === "SUSPENDED" ? <CheckCircle2 className="size-4" /> : <Ban className="size-4" />}
+                                  </button>
+                                )}
+                                {!u.isPrimary && canDelete && (
+                                  <button
+                                    onClick={() => runAction(`delete-user-${u.id}`, () => deletePortalUserAction(u.id))}
+                                    disabled={pendingAction === `delete-user-${u.id}`}
+                                    className="rounded-lg p-1.5 text-text-muted hover:bg-red/10 hover:text-red disabled:opacity-50"
+                                    aria-label={`Delete ${u.name}`}
+                                    title="Delete user"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </TD>
+                          </TR>
+                        );
+                      })}
+                    </TBody>
+                  </Table>
+                </TableContainer>
+                <p className="text-xs text-text-muted">
+                  The primary login is suspended or deleted together with the customer (Actions tab).
+                </p>
+              </div>
+            ),
+          },
+          {
             key: "subscriptions",
             label: "Subscriptions & Plans",
             content:
@@ -248,6 +466,7 @@ export function CustomerDetailClient({
                   <Table>
                     <THead>
                       <TR>
+                        <TH>Account</TH>
                         <TH>Plan</TH>
                         <TH>Provider</TH>
                         <TH>Price</TH>
@@ -260,6 +479,7 @@ export function CustomerDetailClient({
                     <TBody>
                       {customer.subscriptions.map((s) => (
                         <TR key={s.id}>
+                          <TD className="font-mono text-xs">{displayOrDash(s.accountNumber)}</TD>
                           <TD className="font-medium text-text-primary">{s.planName}</TD>
                           <TD>{s.planProvider}</TD>
                           <TD>{formatCurrency(s.monthlyPrice, s.currency)}/mo</TD>
@@ -287,12 +507,28 @@ export function CustomerDetailClient({
                   icon={Radio}
                   title="No usage history"
                   description="Usage will appear here after a CDR upload or manual entry."
+                  action={
+                    accounts.length > 0 ? (
+                      <Button size="sm" variant="outline" onClick={() => setEditingUsage("new")}>
+                        <Plus className="size-4" />
+                        Add manual usage
+                      </Button>
+                    ) : undefined
+                  }
                 />
               ) : (
+                <div className="space-y-3">
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setEditingUsage("new")} disabled={accounts.length === 0}>
+                    <Plus className="size-4" />
+                    Add manual usage
+                  </Button>
+                </div>
                 <TableContainer>
                   <Table>
                     <THead>
                       <TR>
+                        <TH>Account</TH>
                         <TH>Period</TH>
                         <TH>Data Used</TH>
                         <TH>In Bundle</TH>
@@ -304,7 +540,8 @@ export function CustomerDetailClient({
                     </THead>
                     <TBody>
                       {usageHistory.map((u) => (
-                        <TR key={u.periodMonth}>
+                        <TR key={`${u.accountId}-${u.periodMonth}`}>
+                          <TD className="font-mono text-xs">{displayOrDash(u.accountNumber)}</TD>
                           <TD className="font-medium text-text-primary">{formatPeriodMonth(u.periodMonth)}</TD>
                           <TD>{u.volumeDataGB.toFixed(2)} GB</TD>
                           <TD>{u.volumeInBundleGB.toFixed(2)} GB</TD>
@@ -329,6 +566,7 @@ export function CustomerDetailClient({
                     </TBody>
                   </Table>
                 </TableContainer>
+                </div>
               ),
           },
           {
@@ -343,6 +581,7 @@ export function CustomerDetailClient({
                     <THead>
                       <TR>
                         <TH>Invoice #</TH>
+                        <TH>Account</TH>
                         <TH>Period</TH>
                         <TH>Issue Date</TH>
                         <TH>Due Date</TH>
@@ -358,6 +597,7 @@ export function CustomerDetailClient({
                               {inv.invoiceNumber}
                             </Link>
                           </TD>
+                          <TD className="font-mono text-xs">{displayOrDash(inv.accountNumber)}</TD>
                           <TD>{formatPeriodMonth(inv.periodMonth)}</TD>
                           <TD>{formatDate(inv.issueDate)}</TD>
                           <TD>{formatDate(inv.dueDate)}</TD>
@@ -399,6 +639,8 @@ export function CustomerDetailClient({
                     <THead>
                       <TR>
                         <TH>Date</TH>
+                        <TH>Account</TH>
+                        <TH>Product</TH>
                         <TH>CDR ID</TH>
                         <TH>Period</TH>
                         <TH>Card Name</TH>
@@ -412,7 +654,9 @@ export function CustomerDetailClient({
                       {cdrRecords.map((r) => (
                         <TR key={r.id}>
                           <TD>{r.startCdr ? formatDate(r.startCdr) : "--"}</TD>
-                          <TD className="font-mono text-xs">{r.cdrId}</TD>
+                          <TD className="font-mono text-xs">{displayOrDash(r.accountNumber)}</TD>
+                          <TD className="font-mono text-xs">{displayOrDash(r.productCode)}</TD>
+                          <TD className="font-mono text-xs">{r.cdrId.startsWith("row:") ? "--" : r.cdrId}</TD>
                           <TD>{formatPeriodMonth(r.period)}</TD>
                           <TD>{displayOrDash(r.cardName)}</TD>
                           <TD>{displayOrDash(r.service)}</TD>
@@ -454,10 +698,10 @@ export function CustomerDetailClient({
             label: "Actions",
             content: (
               <div className="max-w-sm space-y-3">
-                {customer.status !== "ACTIVE" && (
+                {(customer.status === "INVITED" || customer.mustChangePassword) && (
                   <ActionButton
                     icon={Mail}
-                    label="Resend Invitation"
+                    label="Re-send Invitation (new temporary password)"
                     pending={pendingAction === "resend"}
                     onClick={() => runAction("resend", () => resendInviteAction(customer.id))}
                   />
@@ -501,9 +745,32 @@ export function CustomerDetailClient({
       {editingUsage && (
         <UsageHistoryEditModal
           customerId={customer.id}
-          usage={editingUsage}
+          accounts={accounts}
+          usage={editingUsage === "new" ? null : editingUsage}
           onClose={() => {
             setEditingUsage(null);
+            router.refresh();
+          }}
+        />
+      )}
+      {editingAccount && (
+        <CustomerAccountFormModal
+          customerId={customer.id}
+          account={editingAccount === "new" ? null : editingAccount}
+          plans={plans}
+          onClose={() => {
+            setEditingAccount(null);
+            router.refresh();
+          }}
+        />
+      )}
+      {editingUser && (
+        <PortalUserModal
+          profileId={customer.id}
+          accounts={accounts}
+          user={editingUser === "new" ? null : editingUser}
+          onClose={() => {
+            setEditingUser(null);
             router.refresh();
           }}
         />
@@ -512,7 +779,7 @@ export function CustomerDetailClient({
       <DeleteConfirmModal
         open={deleteOpen}
         title={`Delete ${customer.name}?`}
-        description="This customer and their account details will be permanently deleted and cannot be recovered."
+        description="The customer, its portal users and its Customer Accounts will be permanently deleted. Customers with invoices can't be deleted — suspend them instead."
         loading={pendingAction === "delete"}
         onCancel={() => setDeleteOpen(false)}
         onConfirm={handleDelete}

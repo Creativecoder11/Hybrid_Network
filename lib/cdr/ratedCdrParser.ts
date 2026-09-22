@@ -86,8 +86,10 @@ export function parseRatedCdrSheet(sheet: XLSX.WorkSheet): ParseResult {
     if (!row || row.length === 0) return;
 
     const customerCode = str(row[COLUMN_INDEX.customerCode]);
-    // The grand-totals row has an empty Customer Code and only sum columns filled — skip it.
-    if (!customerCode) {
+    // The grand-totals row has no Customer Code, CDR ID or ICCID — only sum
+    // columns — so skip it. A real record missing just its Customer Code is
+    // kept and reported as Unallocated rather than silently dropped.
+    if (!customerCode && !str(row[COLUMN_INDEX.cdrId]) && !str(row[COLUMN_INDEX.iccid])) {
       skippedRows++;
       return;
     }

@@ -2,7 +2,7 @@ import { UsageRecord } from "@/models/UsageRecord";
 import type { ParsedCdrRow } from "./types";
 import type { CdrUploadMode } from "@/models/CdrBatch";
 
-export type MatchedCdrRow = ParsedCdrRow & { customerId: string };
+export type MatchedCdrRow = ParsedCdrRow & { customerId: string; accountId: string };
 
 type PeriodTotals = {
   volumeDataBytes: number;
@@ -19,6 +19,8 @@ type PeriodTotals = {
   cdrPriceInvoiced: number;
   currency: string;
 };
+
+type UsageGroup = { customerId: string; accountId: string; period: string; totals: PeriodTotals };
 
 function emptyTotals(): PeriodTotals {
   return {
@@ -38,15 +40,15 @@ function emptyTotals(): PeriodTotals {
   };
 }
 
-/** Groups matched rows by (customer, period) and sums every volume/consumption/price field. */
-export function groupByCustomerPeriod(rows: MatchedCdrRow[]): Map<string, { customerId: string; period: string; totals: PeriodTotals }> {
-  const groups = new Map<string, { customerId: string; period: string; totals: PeriodTotals }>();
+/** Groups allocated rows by (Customer Account, period) and sums every volume/consumption/price field. */
+export function groupByAccountPeriod(rows: MatchedCdrRow[]): Map<string, UsageGroup> {
+  const groups = new Map<string, UsageGroup>();
 
   for (const row of rows) {
-    const key = `${row.customerId}|${row.period}`;
+    const key = `${row.accountId}|${row.period}`;
     let group = groups.get(key);
     if (!group) {
-      group = { customerId: row.customerId, period: row.period, totals: emptyTotals() };
+      group = { customerId: row.customerId, accountId: row.accountId, period: row.period, totals: emptyTotals() };
       groups.set(key, group);
     }
     const t = group.totals;
@@ -68,52 +70,36 @@ export function groupByCustomerPeriod(rows: MatchedCdrRow[]): Map<string, { cust
   return groups;
 }
 
+/**
+ * Writes usage per (customer, Customer Account, month). REPLACE overwrites the
+ * month with this upload's totals; ACCUMULATE adds them (used for partial
+ * uploads and for records allocated later by reprocessing).
+ */
 export async function upsertUsageRecords(
-  groups: Map<string, { customerId: string; period: string; totals: PeriodTotals }>,
+  groups: Map<string, UsageGroup>,
   mode: CdrUploadMode,
   batchId: string,
   adminId: string
 ): Promise<number> {
   let updated = 0;
 
-  for (const { customerId, period, totals } of groups.values()) {
-    const existing = await UsageRecord.findOne({ customer: customerId, periodMonth: period });
+  for (const { customerId, accountId, period, totals } of groups.values()) {
+    const filter = { customer: customerId, customerAccount: accountId, periodMonth: period };
+    const existing = await UsageRecord.findOne(filter).select("source").lean();
     const hadManual = existing?.source === "MANUAL" || existing?.source === "CDR+MANUAL";
     const source = hadManual ? "CDR+MANUAL" : "CDR";
 
     if (mode === "REPLACE") {
       await UsageRecord.findOneAndUpdate(
-        { customer: customerId, periodMonth: period },
-        {
-          $set: {
-            ...totals,
-            source,
-            cdrBatch: batchId,
-            lastUpdatedBy: adminId,
-          },
-        },
+        filter,
+        { $set: { ...totals, source, cdrBatch: batchId, lastUpdatedBy: adminId } },
         { upsert: true, setDefaultsOnInsert: true }
       );
     } else {
+      const { currency, ...increments } = totals;
       await UsageRecord.findOneAndUpdate(
-        { customer: customerId, periodMonth: period },
-        {
-          $inc: {
-            volumeDataBytes: totals.volumeDataBytes,
-            volumeMin: totals.volumeMin,
-            volumeMsg: totals.volumeMsg,
-            volumeInBundleBytes: totals.volumeInBundleBytes,
-            volumeOutBundleBytes: totals.volumeOutBundleBytes,
-            volumeTotalBytes: totals.volumeTotalBytes,
-            consumptionMoney: totals.consumptionMoney,
-            consumptionDataBytes: totals.consumptionDataBytes,
-            consumptionMin: totals.consumptionMin,
-            consumptionMsg: totals.consumptionMsg,
-            cdrPriceTotal: totals.cdrPriceTotal,
-            cdrPriceInvoiced: totals.cdrPriceInvoiced,
-          },
-          $set: { source, currency: totals.currency, cdrBatch: batchId, lastUpdatedBy: adminId },
-        },
+        filter,
+        { $inc: increments, $set: { source, currency, cdrBatch: batchId, lastUpdatedBy: adminId } },
         { upsert: true, setDefaultsOnInsert: true }
       );
     }

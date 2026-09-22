@@ -23,8 +23,16 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   const [customer, activeSub, usage] = await Promise.all([
     User.findById(invoice.customer).lean(),
-    Subscription.findOne({ customer: invoice.customer, status: "ACTIVE" }).populate("plan").lean(),
-    UsageRecord.findOne({ customer: invoice.customer, periodMonth: invoice.periodMonth }).lean(),
+    Subscription.findOne(
+      invoice.customerAccount ? { customerAccount: invoice.customerAccount, status: "ACTIVE" } : { customer: invoice.customer, status: "ACTIVE" }
+    )
+      .populate("plan")
+      .lean(),
+    UsageRecord.findOne(
+      invoice.customerAccount
+        ? { customerAccount: invoice.customerAccount, periodMonth: invoice.periodMonth }
+        : { customer: invoice.customer, periodMonth: invoice.periodMonth }
+    ).lean(),
   ]);
 
   const planName = (activeSub?.plan as unknown as { name?: string } | null)?.name ?? "--";
@@ -34,7 +42,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     invoiceNumber: invoice.invoiceNumber,
     customerId: customer?._id?.toString() ?? "",
     customerName: customer?.name ?? "Unknown",
-    customerCode: customer?.customerCode ?? "",
+    customerCode: invoice.accountNumber || customer?.customerCode || "",
     customerEmail: customer?.email ?? "",
     vendor: customer?.vendor ?? "--",
     cardName: customer?.cardName ?? "--",

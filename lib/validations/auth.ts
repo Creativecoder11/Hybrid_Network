@@ -40,3 +40,16 @@ export const resetPasswordSchema = z
     path: ["confirmPassword"],
   });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const firstLoginChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current temporary password is required"),
+    newPassword: passwordField,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match",
+    path: ["confirmPassword"],
+  });
+export type FirstLoginChangePasswordInput = z.infer<typeof firstLoginChangePasswordSchema>;
+

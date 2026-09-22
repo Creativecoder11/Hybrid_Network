@@ -11,6 +11,7 @@ import {
   SupportTicket,
   ActivityLog,
   Settings,
+  CustomerAccount,
 } from "@/models";
 
 // NOTE: this script runs standalone via `tsx` (not through Next's bundler),
@@ -88,15 +89,19 @@ async function main() {
     SupportTicket.deleteMany({}),
     ActivityLog.deleteMany({}),
     Settings.deleteMany({}),
+    CustomerAccount.deleteMany({}),
   ]);
 
   // ---------- Settings ----------
+  // Company address / ABN / contact details are deliberately left blank —
+  // they must be entered for real in Admin -> Settings before invoices go out.
   await Settings.create({
     key: "GLOBAL",
     companyName: "Hybrid Networks",
-    companyAddress: "Level 12, Menara Hybrid, Jalan Ampang, 50450 Kuala Lumpur, Malaysia",
-    companyEmail: "billing@hybridnetworks.com",
-    companyPhone: "+60 3-2145 8890",
+    companyLegalName: "Hybrid Networks Pty Ltd",
+    companyAddress: "",
+    companyEmail: "",
+    companyPhone: "",
     currency: "USD",
     taxLabel: "GST",
     taxRate: 6,
@@ -308,6 +313,8 @@ async function main() {
   ];
 
   const createdCustomers: {
+    accountId: string;
+    accountNumber: string;
     id: string;
     name: string;
     plan: typeof maritimePlan;
@@ -361,8 +368,19 @@ async function main() {
 
     const customer = await User.create(userDoc);
 
+    // The customer code is the Customer Account number used for CDR allocation.
+    const account = await CustomerAccount.create({
+      customer: customer._id,
+      accountNumber: seed.customerCode,
+      status: "ACTIVE",
+      iccids: [seed.iccid].filter(Boolean),
+      cardName: seed.cardName,
+      createdBy: superAdmin._id,
+    });
+
     const subscription = await Subscription.create({
       customer: customer._id,
+      customerAccount: account._id,
       plan: seed.plan._id,
       startDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 200),
       status: seed.subStatus,
@@ -371,6 +389,8 @@ async function main() {
     });
 
     createdCustomers.push({
+      accountId: account._id.toString(),
+      accountNumber: account.accountNumber,
       id: customer._id.toString(),
       name: customer.name,
       plan: seed.plan,
@@ -386,6 +406,7 @@ async function main() {
 
       await UsageRecord.create({
         customer: customer._id,
+        customerAccount: account._id,
         subscription: subscription._id,
         periodMonth: monthsAgo(m),
         volumeDataBytes,
@@ -453,6 +474,8 @@ async function main() {
       await Invoice.create({
         invoiceNumber,
         customer: c.id,
+        customerAccount: c.accountId,
+        accountNumber: c.accountNumber,
         subscription: c.subscriptionId,
         periodMonth,
         issueDate,

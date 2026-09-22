@@ -36,6 +36,10 @@ const InvoiceSchema = new Schema(
   {
     invoiceNumber: { type: String, required: true, unique: true },
     customer: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    // The Customer Account this bill belongs to. accountNumber is a snapshot
+    // so the printed tax invoice never changes if the account is edited later.
+    customerAccount: { type: Schema.Types.ObjectId, ref: "CustomerAccount", default: null, index: true },
+    accountNumber: { type: String, default: "" },
     subscription: { type: Schema.Types.ObjectId, ref: "Subscription", default: null },
     periodMonth: { type: String, required: true },
     issueDate: { type: Date, required: true, default: Date.now },
@@ -61,6 +65,7 @@ const InvoiceSchema = new Schema(
 );
 
 InvoiceSchema.index({ customer: 1, status: 1 });
+InvoiceSchema.index({ customerAccount: 1, status: 1 });
 InvoiceSchema.index({ dueDate: 1 });
 InvoiceSchema.index({ deletedAt: 1 });
 

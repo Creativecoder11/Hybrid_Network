@@ -236,3 +236,23 @@ build's pages.
   chunks the new build no longer contains. Purge the CDN cache (§9) and
   Restart the app. Pages are served with `no-store` now, so this only
   happens for copies cached before that change was deployed.
+
+## Data migrations (multi-account release)
+
+The multi-account release adds Customer Accounts. Existing data is migrated
+automatically the first time either deployment starts (`instrumentation.ts`):
+
+1. `001-customer-accounts` — creates a Customer Account from each customer's
+   existing Customer Code (and moves its Starlink vessel / ICCID links onto
+   it). Customers that had devices but no Customer Code get an account
+   numbered with their portal Customer ID — rename those in Admin → Customers
+   → Accounts.
+2. `002-account-backfill` — links existing invoices, subscriptions, usage and
+   CDR records to that account, and replaces the old one-usage-row-per-month
+   index (index only, no data removed).
+
+Both are idempotent, recorded in the `migrations` collection, and safe when
+both deployments start at the same time. To run them manually instead, set
+`SKIP_BOOT_MIGRATIONS=true` and run `npm run migrate` from the app directory.
+**Take an Atlas backup/snapshot before deploying this release.**
+

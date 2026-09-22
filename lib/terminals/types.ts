@@ -1,8 +1,9 @@
-// Types mirror the client's future Terminal Hardware & Live Service Data API
-// one-for-one. This file is the "contract" — lib/terminals/mockProvider.ts
-// satisfies it with generated data today; a future lib/terminals/liveProvider.ts
-// will satisfy it with real API calls, and nothing above the service layer
-// (Server Actions, pages, components) needs to change when that swap happens.
+// The normalized device contract every page and export reads. The SLASH
+// adapter (lib/terminals/liveProvider.ts) builds these from real API data;
+// nothing above lib/terminals/service.ts ever sees a raw SLASH response.
+//
+// Convention: a metric the API did not provide is `null` (rendered as "Not
+// available"), never 0 or a made-up default — 0 is a real reading.
 
 export type TerminalStatus =
   | "ACTIVE"
@@ -37,20 +38,37 @@ export type TerminalActivation = {
   suspensionDate: string | null;
   reactivationDate: string | null;
   servicePlan: string;
+  /** Customer Profile (User id) the device belongs to. */
   assignedCustomerId: string | null;
   assignedCustomerName: string | null;
+  /** Customer Account the device's vessel is linked to. */
+  assignedAccountId: string | null;
+  assignedAccountNumber: string | null;
+  serviceLineNumber: string | null;
+  /** Vessel / service-line nickname from SLASH, used as the terminal's display name. */
+  displayName: string | null;
 };
 
-export type ConnectionState = "CONNECTED" | "CONNECTING" | "IDLE" | "DISCONNECTED";
+export type OnlineStatus = "ONLINE" | "OFFLINE" | "UNKNOWN";
+export type ConnectionState = "CONNECTED" | "CONNECTING" | "IDLE" | "DISCONNECTED" | "UNKNOWN";
 export type DataSessionStatus = "ACTIVE" | "IDLE" | "NONE";
 
 export type TerminalLiveData = {
-  onlineStatus: "ONLINE" | "OFFLINE";
+  /**
+   * ONLINE: telemetry received within the online threshold (see
+   * lib/terminals/status.ts). OFFLINE: telemetry exists but is older.
+   * UNKNOWN: no telemetry could be read for this device.
+   */
+  onlineStatus: OnlineStatus;
   connectionState: ConnectionState;
-  signalStrengthDbm: number;
-  signalQualityPct: number;
+  /** Starlink does not report dBm — null for SLASH devices. */
+  signalStrengthDbm: number | null;
+  signalQualityPct: number | null;
   dataSessionStatus: DataSessionStatus;
-  lastSeenAt: string;
+  /** Last telemetry sample time; null when the device has never reported. */
+  lastSeenAt: string | null;
+  /** Plain-language explanation of onlineStatus, e.g. "Last telemetry 4 min ago". */
+  statusReason: string;
 };
 
 export type GpsLocation = {
@@ -78,13 +96,22 @@ export type UsageStats = {
 export type LinkQuality = "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
 
 export type NetworkPerformance = {
-  latencyMs: number;
-  packetLossPct: number;
-  uptimePct: number;
-  downtimeMinutesLast30d: number;
-  bandwidthMbps: number;
-  throughputMbps: number;
-  linkQuality: LinkQuality;
+  latencyMs: number | null;
+  packetLossPct: number | null;
+  uptimePct: number | null;
+  /** Seconds since the terminal last booted (SLASH uptimeSeconds). */
+  uptimeSeconds: number | null;
+  obstructionPct: number | null;
+  downtimeMinutesLast30d: number | null;
+  bandwidthMbps: number | null;
+  /** Kept for existing summaries: equals downlinkThroughputMbps. */
+  throughputMbps: number | null;
+  downlinkThroughputMbps: number | null;
+  uplinkThroughputMbps: number | null;
+  /** When the throughput/latency readings above were sampled. */
+  measuredAt: string | null;
+  /** Not reported by SLASH — null for live devices rather than a guess. */
+  linkQuality: LinkQuality | null;
 };
 
 export type FaultSeverity = "CRITICAL" | "MAJOR" | "MINOR" | "WARNING";
@@ -119,14 +146,16 @@ export type TerminalAlarm = {
 
 export type OkFaultUnknown = "OK" | "FAULT" | "UNKNOWN";
 
+// Hardware health isn't exposed by SLASH for Starlink terminals, so live
+// devices report UNKNOWN / null here rather than an invented "OK".
 export type TerminalHealth = {
   powerStatus: OkFaultUnknown;
-  temperatureCelsius: number;
-  voltage: number;
+  temperatureCelsius: number | null;
+  voltage: number | null;
   antennaAlignment: "ALIGNED" | "MISALIGNED" | "UNKNOWN";
-  modemStatus: "OK" | "FAULT";
-  simStatus: "OK" | "FAULT" | "NOT_DETECTED";
-  firmwareStatus: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATING";
+  modemStatus: "OK" | "FAULT" | "UNKNOWN";
+  simStatus: "OK" | "FAULT" | "NOT_DETECTED" | "UNKNOWN";
+  firmwareStatus: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATING" | "UNKNOWN";
 };
 
 export type BillingStatus = "CURRENT" | "OVERDUE" | "SUSPENDED_FOR_NONPAYMENT";
@@ -170,28 +199,35 @@ export type TerminalRecord = {
    * Set only for terminals sourced from the real Starlink/SLASH API
    * (see lib/terminals/liveProvider.ts). Lets the command layer route
    * REBOOT to the real `reboot_user_terminal` passthrough action instead of
-   * the local-only simulation used for mock terminals. Undefined for mock
-   * terminals.
+   * the local-only simulation used for demo terminals.
    */
   sourceVesselId?: string;
+  /** "SLASH" = real API data; "DEMO" = generated demo data (ENABLE_DEMO_TERMINALS only). */
+  dataSource: "SLASH" | "DEMO";
+  /** Raw SLASH ping drop rate (0–1 fraction), kept alongside packetLossPct for exports. */
+  pingDropRate?: number | null;
 };
 
 export type TerminalListFilters = {
   q?: string;
   status?: TerminalStatus | "ALL";
   customerId?: string;
+  /** Restrict to devices linked to these Customer Accounts. */
+  accountIds?: string[];
   faultStatus?: FaultStatus | "ANY";
   gpsRegion?: string;
   lastOnlineWithinHours?: number;
 };
 
-export type RemoteCommandType =
-  | "REBOOT"
-  | "REFRESH_SERVICE"
-  | "SUSPEND"
-  | "REACTIVATE"
-  | "UPDATE_FIRMWARE"
-  | "REQUEST_DIAGNOSTICS";
+export const REMOTE_COMMANDS = [
+  "REBOOT",
+  "REFRESH_SERVICE",
+  "SUSPEND",
+  "REACTIVATE",
+  "UPDATE_FIRMWARE",
+  "REQUEST_DIAGNOSTICS",
+] as const;
+export type RemoteCommandType = (typeof REMOTE_COMMANDS)[number];
 
 /**
  * The interface a terminal data source must satisfy. lib/terminals/mockProvider.ts

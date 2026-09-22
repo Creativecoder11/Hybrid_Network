@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import Papa from "papaparse";
+import { toCsv } from "@/lib/reports/csv";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { listTerminals } from "@/lib/terminals/service";
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const csv = Papa.unparse(
+  const csv = toCsv(
     terminals.map((t) => ({
       "Serial Number": t.identification.serialNumber,
       IMEI: t.identification.imei,
@@ -29,13 +29,17 @@ export async function GET(request: NextRequest) {
       "Hardware ID": t.identification.hardwareId,
       Model: t.product.model,
       Manufacturer: t.product.manufacturer,
-      "Firmware Version": t.product.firmwareVersion,
+      "Firmware Version": t.product.firmwareVersion || "Not available",
       Status: t.status,
       Customer: t.activation.assignedCustomerName ?? "",
+      "Account Number": t.activation.assignedAccountNumber ?? "",
+      "Service Line": t.activation.serviceLineNumber ?? "",
       Plan: t.activation.servicePlan,
       "Online Status": t.live.onlineStatus,
-      "Signal (dBm)": t.live.signalStrengthDbm,
-      "Last Seen": t.live.lastSeenAt,
+      "Signal Quality (%)": t.live.signalQualityPct ?? "Not available",
+      "Downlink (Mbps)": t.network.downlinkThroughputMbps ?? "Not available",
+      "Uplink (Mbps)": t.network.uplinkThroughputMbps ?? "Not available",
+      "Last Seen": t.live.lastSeenAt ?? "Never",
       Latitude: t.location?.latitude ?? "",
       Longitude: t.location?.longitude ?? "",
       "Monthly Usage (GB)": t.planBilling.monthlyUsageGB,

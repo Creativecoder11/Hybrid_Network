@@ -14,6 +14,7 @@ import {
   setPasswordSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  firstLoginChangePasswordSchema,
 } from "@/lib/validations/auth";
 
 export type AuthFormState = {
@@ -58,7 +59,11 @@ export async function loginAction(
     return { error: `Too many failed attempts. Try again in ${minutesLeft} minute(s).` };
   }
 
-  if (user.status === "INVITED") {
+  // Invited users sign in with the temporary password from their invitation
+  // email and are sent straight to the first-login password change. Older
+  // invitations (set-password link, no temporary password) still use the link.
+  const hasTemporaryPassword = Boolean(user.passwordHash && user.mustChangePassword);
+  if (user.status === "INVITED" && !hasTemporaryPassword) {
     return {
       error:
         "Your account hasn't been activated yet. Check your email for the setup link, or ask your administrator to resend it.",
@@ -67,6 +72,13 @@ export async function loginAction(
 
   if (user.status === "SUSPENDED") {
     return { error: "Your account has been suspended. Contact support for assistance." };
+  }
+
+  if (user.role === "CUSTOMER" && user.customerProfile) {
+    const profile = await User.findById(user.customerProfile).select("status").lean();
+    if (!profile || profile.status === "SUSPENDED") {
+      return { error: "Your organisation's account has been suspended. Contact support for assistance." };
+    }
   }
 
   const validPassword = user.passwordHash
@@ -85,6 +97,20 @@ export async function loginAction(
     return { error: "Invalid email/ID or password." };
   }
 
+  // Checked only after the password is verified so an expired-invite
+  // message can't be used to probe which emails are registered.
+  if (
+    hasTemporaryPassword &&
+    user.tempPasswordExpiresAt &&
+    user.tempPasswordExpiresAt.getTime() < Date.now()
+  ) {
+    await ActivityLog.create({ actor: user._id, targetCustomer: user.role === "CUSTOMER" ? user._id : null, action: "INVITE_EXPIRED_LOGIN" });
+    return {
+      error:
+        "Your temporary password has expired. Ask your administrator to re-send your invitation.",
+    };
+  }
+
   const portalMode = process.env.PORTAL_MODE;
   if (portalMode === "admin" && user.role === "CUSTOMER") {
     return {
@@ -100,9 +126,72 @@ export async function loginAction(
     };
   }
 
-  await User.updateOne({ _id: user._id }, { loginAttempts: 0, lockedUntil: null });
+  await User.updateOne({ _id: user._id }, { loginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() });
   await createSession(user._id.toString(), user.role, parsed.data.keepSignedIn);
   await ActivityLog.create({ actor: user._id, action: "LOGIN" });
+
+  if (user.mustChangePassword) {
+    redirect("/first-login-change-password");
+  }
+
+  redirect(homeForRole(user.role));
+}
+
+export async function firstLoginChangePasswordAction(
+  _prevState: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  const session = await getSession();
+  if (!session?.userId) {
+    return { error: "Your session has expired. Please sign in again." };
+  }
+
+  const parsed = firstLoginChangePasswordSchema.safeParse({
+    currentPassword: String(formData.get("currentPassword") ?? ""),
+    newPassword: String(formData.get("newPassword") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Please check your inputs and try again." };
+  }
+
+  await connectDB();
+  const user = await User.findById(session.userId).select("+passwordHash");
+  if (!user || user.status === "SUSPENDED") {
+    return { error: "Your session has expired. Please sign in again." };
+  }
+  if (!user.mustChangePassword) {
+    redirect(homeForRole(user.role));
+  }
+
+  const validPassword = user.passwordHash
+    ? await verifyPassword(parsed.data.currentPassword, user.passwordHash)
+    : false;
+
+  if (!validPassword) {
+    return { error: "The current temporary password you entered is incorrect." };
+  }
+
+  if (parsed.data.newPassword === parsed.data.currentPassword) {
+    return { error: "Your new password must be different from the temporary password." };
+  }
+
+  const newHash = await hashPassword(parsed.data.newPassword);
+  user.passwordHash = newHash;
+  user.mustChangePassword = false;
+  user.tempPasswordIssuedAt = null;
+  user.tempPasswordExpiresAt = null;
+  // Completing the first-login change is what activates an invited account.
+  if (user.status === "INVITED") user.status = "ACTIVE";
+  await user.save();
+
+  await ActivityLog.create({
+    actor: user._id,
+    targetCustomer: user.role === "CUSTOMER" ? (user.customerProfile ?? user._id) : null,
+    action: "FIRST_LOGIN_PASSWORD_SET",
+    meta: { email: user.email },
+  });
 
   redirect(homeForRole(user.role));
 }

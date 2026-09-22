@@ -13,6 +13,15 @@ import type {
   RemoteCommandType,
 } from "./types";
 
+// DEMO DATA ONLY. Generates fabricated terminals (random signal, location,
+// throughput...) for local demos. It is disabled unless
+// ENABLE_DEMO_TERMINALS=true, and even then it never serves the customer
+// portal (demo records aren't linked to any Customer Account). Real devices
+// come exclusively from lib/terminals/liveProvider.ts.
+export function demoTerminalsEnabled(): boolean {
+  return process.env.ENABLE_DEMO_TERMINALS === "true";
+}
+
 // ---------- deterministic PRNG, seeded per terminal so repeated reads of the
 // same terminal return stable base data instead of re-randomizing every call ----------
 function seededRandom(seed: string) {
@@ -242,6 +251,10 @@ function generateTerminal(seed: SourceCustomer | { iccid: string; vendor: string
       servicePlan: isAssigned ? (seed as SourceCustomer).planName : "Unassigned",
       assignedCustomerId: isAssigned ? (seed as SourceCustomer).customerId : null,
       assignedCustomerName: isAssigned ? (seed as SourceCustomer).customerName : null,
+      assignedAccountId: null,
+      assignedAccountNumber: null,
+      serviceLineNumber: null,
+      displayName: null,
     },
     live: {
       onlineStatus: isOnline ? "ONLINE" : "OFFLINE",
@@ -250,6 +263,7 @@ function generateTerminal(seed: SourceCustomer | { iccid: string; vendor: string
       signalQualityPct: isOnline ? Math.round(between(rng, 55, 99)) : 0,
       dataSessionStatus: isOnline ? pick(rng, ["ACTIVE", "ACTIVE", "IDLE"]) : "NONE",
       lastSeenAt: isOnline ? hoursAgo(between(rng, 0, 0.2)) : hoursAgo(between(rng, 2, 96)),
+      statusReason: "Demo data",
     },
     location: status === "PENDING_ACTIVATION" ? null : { latitude: round(baseLat, 5), longitude: round(baseLng, 5), altitudeMeters: round(between(rng, 5, 60), 1), accuracyMeters: round(between(rng, 2, 10), 1), timestamp: hoursAgo(between(rng, 0, 1)) },
     locationHistory: status === "PENDING_ACTIVATION" ? [] : buildLocationHistory(rng, baseLat, baseLng),
@@ -268,6 +282,11 @@ function generateTerminal(seed: SourceCustomer | { iccid: string; vendor: string
       downtimeMinutesLast30d: Math.round(between(rng, 0, 180)),
       bandwidthMbps: round(between(rng, 80, 220), 0),
       throughputMbps: isOnline ? round(between(rng, 20, 180), 0) : 0,
+      downlinkThroughputMbps: isOnline ? round(between(rng, 20, 180), 0) : 0,
+      uplinkThroughputMbps: isOnline ? round(between(rng, 5, 25), 0) : 0,
+      uptimeSeconds: null,
+      obstructionPct: null,
+      measuredAt: hoursAgo(0),
       linkQuality: isOnline ? pick(rng, ["EXCELLENT", "GOOD", "GOOD", "FAIR"]) : "POOR",
     },
     faults: buildFaults(rng, hasFault),
@@ -292,16 +311,18 @@ function generateTerminal(seed: SourceCustomer | { iccid: string; vendor: string
     },
     auditHistory: activationDate ? buildAuditHistory(rng, activationDate) : [],
     dataRefreshRateSeconds: 60,
+    dataSource: "DEMO",
   };
 }
 
 async function loadSourceCustomers(): Promise<SourceCustomer[]> {
   await connectDB();
-  // Customers linked to a real Starlink vessel (User.starlinkVesselId) are
-  // served by lib/terminals/liveProvider.ts instead — excluded here so they
-  // don't get a duplicate, fabricated terminal record.
+  // Customers linked to a real Starlink vessel are served by
+  // lib/terminals/liveProvider.ts instead — excluded here so they don't get a
+  // duplicate, fabricated terminal record.
   const customers = await User.find({
     role: "CUSTOMER",
+    customerProfile: null,
     iccid: { $nin: [null, ""] },
     starlinkVesselId: { $in: [null, ""] },
   }).lean();
@@ -334,6 +355,8 @@ async function loadSourceCustomers(): Promise<SourceCustomer[]> {
 }
 
 export async function mockListTerminals(filters?: TerminalListFilters): Promise<TerminalRecord[]> {
+  // Customer-portal queries are account-scoped; demo records have no account.
+  if (!demoTerminalsEnabled() || filters?.accountIds) return [];
   const sourceCustomers = await loadSourceCustomers();
   let records = [
     ...sourceCustomers.map(generateTerminal),
@@ -364,6 +387,7 @@ export async function mockListTerminals(filters?: TerminalListFilters): Promise<
 }
 
 export async function mockGetTerminal(id: string): Promise<TerminalRecord | null> {
+  if (!demoTerminalsEnabled()) return null;
   const all = await mockListTerminals();
   return all.find((t) => t.id === id) ?? null;
 }

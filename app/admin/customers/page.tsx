@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/db/connect";
-import { User } from "@/models/User";
+import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
+import { CustomerAccount } from "@/models/CustomerAccount";
 import { Subscription } from "@/models/Subscription";
 import { ServicePlan } from "@/models/ServicePlan";
 import { Invoice } from "@/models/Invoice";
 import { UsageRecord } from "@/models/UsageRecord";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { CustomersPageClient } from "@/components/admin/CustomersPageClient";
+import { toCustomerRow, escapeRegex } from "@/lib/admin/customerRows";
 import type { CustomerRow, PlanOption } from "@/lib/types/admin";
 
 export const metadata: Metadata = {
   title: "Customers | Hybrid Networks Admin",
 };
-
-const GB = 1_000_000_000;
-const toGB = (bytes: number | null | undefined) => Math.round(((bytes ?? 0) / GB) * 100) / 100;
 
 function currentPeriodMonth(): string {
   const d = new Date();
@@ -36,15 +35,21 @@ export default async function CustomersPage({
   const currentUser = await getCurrentUser();
   await connectDB();
 
-  const filter: Record<string, unknown> = { role: "CUSTOMER" };
+  const filter: Record<string, unknown> = { ...CUSTOMER_PROFILE_FILTER };
   if (status !== "ALL") filter.status = status;
-  if (q) {
+  if (q.trim()) {
+    const pattern = { $regex: escapeRegex(q.trim()), $options: "i" };
+    // Customer Account numbers live on CustomerAccount; include profiles
+    // owning a matching account.
+    const accountOwners = await CustomerAccount.find({ accountNumber: pattern }).select("customer").limit(200).lean();
     filter.$or = [
-      { name: { $regex: q, $options: "i" } },
-      { email: { $regex: q, $options: "i" } },
-      { customerId: { $regex: q, $options: "i" } },
-      { customerCode: { $regex: q, $options: "i" } },
-      { phone: { $regex: q, $options: "i" } },
+      { name: pattern },
+      { email: pattern },
+      { company: pattern },
+      { customerId: pattern },
+      { customerCode: pattern },
+      { phone: pattern },
+      { _id: { $in: accountOwners.map((a) => a.customer) } },
     ];
   }
 
@@ -64,15 +69,22 @@ export default async function CustomersPage({
   const customerIds = customers.map((c) => c._id);
   const periodMonth = currentPeriodMonth();
 
-  const [subs, usageRecords] = await Promise.all([
-    Subscription.find({ customer: { $in: customerIds }, status: "ACTIVE" }).populate("plan").lean(),
+  const [accounts, subs, usageRecords] = await Promise.all([
+    CustomerAccount.find({ customer: { $in: customerIds } }).select("customer accountNumber").sort({ createdAt: 1 }).lean(),
+    Subscription.find({ customer: { $in: customerIds }, status: "ACTIVE" }).populate("plan").sort({ createdAt: 1 }).lean(),
     UsageRecord.find({ customer: { $in: customerIds }, periodMonth }).lean(),
   ]);
+
+  const accountsByCustomer = new Map<string, string[]>();
+  for (const a of accounts) {
+    const key = a.customer.toString();
+    accountsByCustomer.set(key, [...(accountsByCustomer.get(key) ?? []), a.accountNumber]);
+  }
 
   const subByCustomer = new Map<string, { planId: string; planName: string; staticIp: string }>();
   for (const s of subs) {
     const plan = s.plan as unknown as { _id: string; name: string } | null;
-    if (plan) {
+    if (plan && !subByCustomer.has(s.customer.toString())) {
       subByCustomer.set(s.customer.toString(), {
         planId: plan._id.toString(),
         planName: plan.name,
@@ -82,68 +94,23 @@ export default async function CustomersPage({
   }
 
   const usageByCustomer = new Map<string, (typeof usageRecords)[number]>();
-  for (const u of usageRecords) usageByCustomer.set(u.customer.toString(), u);
+  for (const u of usageRecords) {
+    if (!usageByCustomer.has(u.customer.toString())) usageByCustomer.set(u.customer.toString(), u);
+  }
 
-  const rows: CustomerRow[] = customers.map((c) => {
-    const sub = subByCustomer.get(c._id.toString());
-    const usage = usageByCustomer.get(c._id.toString());
-    return {
-      id: c._id.toString(),
-      name: c.name,
-      email: c.email,
-      phone: c.phone ?? "",
-      address: c.address ?? "",
-      company: c.company ?? "",
-      customerId: c.customerId ?? "",
-      customerCode: c.customerCode ?? "",
-      status: c.status,
-      createdAt: (c.createdAt as Date | undefined)?.toISOString() ?? "",
-      accountType: c.accountType ?? null,
-      contactPerson: c.contactPerson ?? "",
-      nidTradeLicense: c.nidTradeLicense ?? "",
-      cardName: c.cardName ?? "",
-      iccid: c.iccid ?? "",
-      imei: c.imei ?? "",
-      service: c.service ?? "",
-      vendor: c.vendor ?? "",
-      starlinkVesselId: c.starlinkVesselId ?? "",
-      starlinkServiceLineNumber: c.starlinkServiceLineNumber ?? "",
-      network: {
-        originNumber: c.network?.originNumber ?? "",
-        originCountry: c.network?.originCountry ?? "",
-        originIpAddress: c.network?.originIpAddress ?? "",
-        originRegion: c.network?.originRegion ?? "",
-        originState: c.network?.originState ?? "",
-        destinationNumber: c.network?.destinationNumber ?? "",
-        destinationNetwork: c.network?.destinationNetwork ?? "",
-        destinationCountry: c.network?.destinationCountry ?? "",
-        destinationState: c.network?.destinationState ?? "",
-      },
-      planId: sub?.planId ?? "",
-      planName: sub?.planName ?? "",
-      staticIp: sub?.staticIp ?? "",
-      usage: usage
-        ? {
-            volumeDataGB: toGB(usage.volumeDataBytes),
-            volumeMin: usage.volumeMin ?? 0,
-            volumeMsg: usage.volumeMsg ?? 0,
-            volumeInBundleGB: toGB(usage.volumeInBundleBytes),
-            volumeOutBundleGB: toGB(usage.volumeOutBundleBytes),
-            volumeTotalGB: toGB(usage.volumeTotalBytes),
-            consumptionMoney: usage.consumptionMoney ?? 0,
-            consumptionDataGB: toGB(usage.consumptionDataBytes),
-            consumptionMin: usage.consumptionMin ?? 0,
-            consumptionMsg: usage.consumptionMsg ?? 0,
-          }
-        : null,
-    };
-  });
+  const rows: CustomerRow[] = customers.map((c) =>
+    toCustomerRow(c, {
+      accountNumbers: accountsByCustomer.get(c._id.toString()) ?? [],
+      plan: subByCustomer.get(c._id.toString()) ?? null,
+      usage: usageByCustomer.get(c._id.toString()) ?? null,
+    })
+  );
 
   // ----- Stat cards -----
   const [totalCustomers, activeCount, suspendedCount, overdueAgg] = await Promise.all([
-    User.countDocuments({ role: "CUSTOMER" }),
-    User.countDocuments({ role: "CUSTOMER", status: "ACTIVE" }),
-    User.countDocuments({ role: "CUSTOMER", status: "SUSPENDED" }),
+    User.countDocuments(CUSTOMER_PROFILE_FILTER),
+    User.countDocuments({ ...CUSTOMER_PROFILE_FILTER, status: "ACTIVE" }),
+    User.countDocuments({ ...CUSTOMER_PROFILE_FILTER, status: "SUSPENDED" }),
     Invoice.aggregate([
       { $match: { status: "OVERDUE" } },
       { $group: { _id: "$customer", total: { $sum: "$total" } } },

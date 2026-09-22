@@ -13,9 +13,11 @@ export function inventoryRows(terminals: TerminalRecord[]) {
     "Hardware ID": t.identification.hardwareId,
     Model: t.product.model,
     Manufacturer: t.product.manufacturer,
-    "Firmware Version": t.product.firmwareVersion,
+    "Firmware Version": t.product.firmwareVersion || "Not available",
     Status: t.status,
     Customer: t.activation.assignedCustomerName ?? "",
+    "Account Number": t.activation.assignedAccountNumber ?? "",
+    "Service Line": t.activation.serviceLineNumber ?? "",
     "Service Plan": t.activation.servicePlan,
     "Activation Date": t.activation.activationDate ?? "",
   }));
@@ -27,8 +29,11 @@ export function statusRows(terminals: TerminalRecord[]) {
     Status: t.status,
     "Online Status": t.live.onlineStatus,
     "Connection State": t.live.connectionState,
-    "Signal Quality (%)": t.live.signalQualityPct,
-    "Last Seen": t.live.lastSeenAt,
+    "Signal Quality (%)": t.live.signalQualityPct ?? "Not available",
+    "Downlink (Mbps)": t.network.downlinkThroughputMbps ?? "Not available",
+    "Uplink (Mbps)": t.network.uplinkThroughputMbps ?? "Not available",
+    "Latency (ms)": t.network.latencyMs ?? "Not available",
+    "Last Seen": t.live.lastSeenAt ?? "Never",
     "Open Faults": t.faults.filter((f) => f.status === "OPEN").length,
   }));
 }
@@ -50,13 +55,13 @@ export function gpsRows(terminals: TerminalRecord[]) {
 
 export function alertRows(alerts: EnrichedAlert[]) {
   return alerts.map((a) => ({
-    Device: a.terminalLabel ?? a.userTerminalId ?? "",
+    Device: a.terminalLabel ?? a.deviceId ?? "",
     Customer: a.customerName ?? "",
-    Type: a.type ?? "",
-    Message: a.message ?? "",
-    Severity: a.severity ?? "Not reported",
-    "First Seen": a.startedAt ?? "",
-    "Last Seen": a.endedAt ?? (a.active ? "Ongoing" : ""),
+    "Account Number": a.accountNumber ?? "",
+    Alert: a.alertName,
+    Description: a.description,
+    "First Seen": a.firstSeen ?? "",
+    "Last Seen": a.lastSeen ?? "",
     Status: a.active ? "Active" : "Resolved",
   }));
 }
@@ -65,6 +70,7 @@ export function usageRows(terminals: TerminalRecord[]) {
   return terminals.map((t) => ({
     "Serial Number": t.identification.serialNumber,
     Customer: t.activation.assignedCustomerName ?? "",
+    "Account Number": t.activation.assignedAccountNumber ?? "",
     "Total Usage (GB)": Math.round((t.usage.totalBytes / 1e9) * 100) / 100,
     "Priority (GB)": t.usage.priorityBytes !== undefined ? Math.round((t.usage.priorityBytes / 1e9) * 100) / 100 : "",
     "Standard (GB)": t.usage.standardBytes !== undefined ? Math.round((t.usage.standardBytes / 1e9) * 100) / 100 : "",

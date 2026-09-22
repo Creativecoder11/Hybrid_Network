@@ -1,3 +1,13 @@
+/** Escapes a value for interpolation into email HTML (names, codes, file names...). */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function emailLayout(bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html>

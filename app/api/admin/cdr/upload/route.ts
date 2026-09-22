@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (file.size === 0) {
+    return NextResponse.json({ success: false, error: "The uploaded file is empty." }, { status: 400 });
+  }
+
   const isCsv = file.name.toLowerCase().endsWith(".csv");
   const isXlsx = file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls");
   if (!isCsv && !isXlsx) {

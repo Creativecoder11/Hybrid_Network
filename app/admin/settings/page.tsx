@@ -4,6 +4,8 @@ import { connectDB } from "@/lib/db/connect";
 import { Settings } from "@/models/Settings";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { SettingsPageClient } from "@/components/admin/SettingsPageClient";
+import { missingCompanyDetails } from "@/lib/billing/invoiceData";
+import { slashWriteNotifyAddress } from "@/lib/starlink/passthrough";
 
 export const metadata: Metadata = {
   title: "Settings | Hybrid Networks Admin",
@@ -23,15 +25,25 @@ export default async function SettingsPage() {
     <SettingsPageClient
       settings={{
         companyName: settings.companyName,
+        companyLegalName: settings.companyLegalName ?? "",
+        companyAbn: settings.companyAbn ?? "",
         companyAddress: settings.companyAddress,
         companyEmail: settings.companyEmail,
         companyPhone: settings.companyPhone,
+        companyWebsite: settings.companyWebsite ?? "",
+        paymentInstructions: settings.paymentInstructions ?? "",
         currency: settings.currency,
         taxLabel: settings.taxLabel,
         taxRate: settings.taxRate,
         invoicePrefix: settings.invoicePrefix,
         timezone: settings.timezone,
       }}
+      features={{
+        deviceLocation: settings.featureDeviceLocation !== false,
+        tracking: settings.featureTracking !== false,
+      }}
+      missingInvoiceDetails={missingCompanyDetails(settings)}
+      slashWriteNotifyEmail={slashWriteNotifyAddress()}
       adminEmail={currentUser.email}
     />
   );

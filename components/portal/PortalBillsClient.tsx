@@ -37,9 +37,11 @@ const STATUS_TONE: Record<
 export function PortalBillsClient({
   rows,
   status,
+  accountNumber,
 }: {
   rows: PortalInvoiceRow[];
   status: string;
+  accountNumber: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -54,29 +56,32 @@ export function PortalBillsClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xl font-bold text-text-primary">My Bills</p>
-          <p className="text-sm text-text-muted">Your full invoice history.</p>
+          <p className="text-sm text-text-muted">
+            Invoice history for account <span className="font-mono">{accountNumber}</span>.
+          </p>
         </div>
 
         <Select
           value={status}
           onChange={(e) => updateStatus(e.target.value)}
-          className="w-[200px]"
+          className="w-full sm:w-[200px]"
         >
           <option value="ALL">All statuses</option>
           <option value="DUE">Due</option>
           <option value="OVERDUE">Overdue</option>
           <option value="PAID">Paid</option>
+          <option value="CANCELLED">Cancelled</option>
         </Select>
       </div>
 
       {rows.length === 0 ? (
         <EmptyState
           icon={Receipt}
-          title="No bills yet"
-          description="Your invoices will appear here."
+          title="No invoices available"
+          description={status === "ALL" ? "Invoices for this account will appear here once issued." : "No invoices match this filter."}
         />
       ) : (
         <TableContainer>

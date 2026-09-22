@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import Papa from "papaparse";
+import mongoose from "mongoose";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { connectDB } from "@/lib/db/connect";
 import { CdrChargeRecord, CDR_CHARGE_STATUSES } from "@/models/CdrChargeRecord";
+import { reasonLabel } from "@/lib/cdr/allocation";
+import { toCsv } from "@/lib/reports/csv";
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +16,9 @@ export async function GET(
   }
 
   const { batchId } = await params;
+  if (!mongoose.isValidObjectId(batchId)) {
+    return NextResponse.json({ success: false, error: "Upload not found." }, { status: 404 });
+  }
   const statusParam = request.nextUrl.searchParams.get("status") ?? "";
   const status = CDR_CHARGE_STATUSES.find((s) => s === statusParam);
 
@@ -22,14 +27,23 @@ export async function GET(
   const records = await CdrChargeRecord.find({
     importBatch: batchId,
     ...(status ? { status } : {}),
-  }).lean();
+  })
+    .populate("customerAccount", "accountNumber")
+    .sort({ rowNumber: 1 })
+    .lean();
 
-  const csv = Papa.unparse(
+  const csv = toCsv(
     records.map((r) => ({
       "Row #": r.rowNumber,
-      Identifier: r.identifier,
+      "Record ID": r.sourceRecordId,
+      "Product Code": r.identifier,
+      "Product Name": r.productName ?? "",
+      "Product Type": r.productType ?? "",
+      "Record Type": r.recordType ?? "",
+      "Date / Time": r.eventAt ? new Date(r.eventAt).toISOString() : "",
       Description: r.description,
       "Customer Code": r.customerCode,
+      "Customer Account": (r.customerAccount as unknown as { accountNumber?: string } | null)?.accountNumber ?? "",
       "Wholesale Amount": r.wholesaleAmount,
       Currency: r.currency,
       "Retail Plan": r.retailPlanName,
@@ -37,8 +51,9 @@ export async function GET(
       "Markup %": r.markupPercentUsed ?? "",
       "Fixed Price": r.fixedPriceUsed ?? "",
       "Retail Amount": r.retailAmount,
-      Status: r.status,
-      "Error Reason": r.errorReason,
+      Status: r.status === "MATCHED" ? "ALLOCATED" : r.status === "UNMATCHED" ? "UNALLOCATED" : r.status,
+      "Unallocated Reason": r.status === "UNMATCHED" ? reasonLabel(r.unallocatedReasonCode) : "",
+      Details: r.errorReason,
     }))
   );
 

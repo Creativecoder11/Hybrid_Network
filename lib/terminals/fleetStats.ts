@@ -1,12 +1,11 @@
 import "server-only";
 import type { TerminalRecord } from "./types";
 
-// App-computed fleet aggregates (§6, §14, §12) — there is no confirmed
-// /analytics/fleet/* endpoint on the SLASH API (see
-// docs/slash-api-integration-plan.md), so these are derived here from the
-// already-fetched per-terminal records rather than from a provider
-// analytics endpoint. Explicitly labeled as app-computed everywhere they're
-// rendered.
+// App-computed fleet aggregates, derived from the already-fetched
+// per-terminal records (one telemetry call for the fleet) and labeled as
+// app-computed wherever they're rendered. Averages only include terminals
+// that actually reported the metric (and, for live readings, are online);
+// null means no terminal reported it.
 export type FleetOverviewStats = {
   total: number;
   active: number;
@@ -15,10 +14,10 @@ export type FleetOverviewStats = {
   suspended: number;
   activeServices: number;
   connectivity: {
-    avgLatencyMs: number;
-    avgSignalQualityPct: number;
-    avgThroughputMbps: number;
-    avgUptimePct: number;
+    avgLatencyMs: number | null;
+    avgSignalQualityPct: number | null;
+    avgThroughputMbps: number | null;
+    avgUptimePct: number | null;
     activeCount: number;
     inactiveCount: number;
   };
@@ -30,9 +29,11 @@ export type FleetOverviewStats = {
   };
 };
 
-function avg(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((a, b) => a + b, 0) / values.length;
+function avg(values: (number | null)[], decimals = 0): number | null {
+  const real = values.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (real.length === 0) return null;
+  const f = 10 ** decimals;
+  return Math.round((real.reduce((a, b) => a + b, 0) / real.length) * f) / f;
 }
 
 export function computeFleetOverview(terminals: TerminalRecord[]): FleetOverviewStats {
@@ -42,11 +43,12 @@ export function computeFleetOverview(terminals: TerminalRecord[]): FleetOverview
   const suspended = terminals.filter((t) => t.status === "SUSPENDED").length;
   const activeServices = terminals.filter((t) => t.status === "ACTIVE" && t.planBilling.billingStatus === "CURRENT").length;
 
+  const onlineTerminals = terminals.filter((t) => t.live.onlineStatus === "ONLINE");
   const connectivity = {
-    avgLatencyMs: Math.round(avg(terminals.map((t) => t.network.latencyMs))),
-    avgSignalQualityPct: Math.round(avg(terminals.map((t) => t.live.signalQualityPct))),
-    avgThroughputMbps: Math.round(avg(terminals.map((t) => t.network.throughputMbps)) * 10) / 10,
-    avgUptimePct: Math.round(avg(terminals.map((t) => t.network.uptimePct)) * 10) / 10,
+    avgLatencyMs: avg(onlineTerminals.map((t) => t.network.latencyMs)),
+    avgSignalQualityPct: avg(onlineTerminals.map((t) => t.live.signalQualityPct)),
+    avgThroughputMbps: avg(onlineTerminals.map((t) => t.network.throughputMbps), 1),
+    avgUptimePct: avg(terminals.map((t) => t.network.uptimePct), 1),
     activeCount: active,
     inactiveCount: total - active,
   };

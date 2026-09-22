@@ -352,3 +352,62 @@ connectivity/usage/plan history, fleet analytics endpoints, and most remote
 commands are still "not supported by current API" placeholders, not
 guesses. If you get a fuller spec from the client, the ❌ rows in §1 are
 where to start.
+
+## 10. Official spec, verified field mapping (September 2026 update)
+
+The docs page at `slash-prod.web.app/docs` embeds a complete Swagger 2.0
+document in its shipped JS bundle. It has been extracted to
+[`docs/slash-api-spec.json`](slash-api-spec.json) (72 paths, 165 models).
+Several endpoints listed as "NOT CONFIRMED" in §1 are in that spec and are now
+used. Every field below comes from the spec, not from guesses.
+
+### Device data (portal My Devices / Overview / admin Terminals)
+
+| Portal field | SLASH source |
+|---|---|
+| Online / Offline | `GET /telemetry/vessels/latest` → `lastSeenAt` (fallback `latestTelemetryTimestamp`). ONLINE when newer than `TERMINAL_ONLINE_THRESHOLD_MINUTES` (default 15), OFFLINE otherwise or when never seen, UNKNOWN when the telemetry call fails. See `lib/terminals/status.ts`. |
+| Connection status | Same as above: CONNECTED / DISCONNECTED / UNKNOWN |
+| Service status (Active / Service line inactive) | `GET /vessels` → `serviceLineActive`, `userTerminals[].active` |
+| Signal quality | `telemetry` → `signalQualityPercent` |
+| Download / upload throughput | `telemetry` → `downlinkThroughputMbps` / `uplinkThroughputMbps` (sample time `latestTelemetryTimestamp`) |
+| Latency | `telemetry` → `pingLatencyMsAvg` |
+| Ping drop rate | `telemetry` → `pingDropRateAvg` (unit not stated in the spec; treated as Starlink's 0–1 fraction and shown as %) |
+| Obstruction | `telemetry` → `obstructionPercentTime` |
+| Uptime since boot | `telemetry` → `uptimeSeconds` |
+| Firmware version | `telemetry` → `runningSoftwareVersion` |
+| Location | `GET /vessels/{id}/location/current` (bulk: `GET /vessels/location/current`) → `latitude`, `longitude`, `timestamp`; fallback: telemetry `latitude`/`longitude`. (0,0) = no fix. |
+| Location history | `GET /vessels/{id}/location/history` (`startDate`/`endDate` RFC3339, max 2 months) |
+| Kit / dish serial, terminal id | `GET /vessels` → `userTerminals[].kitSerialNumber`, `dishSerialNumber`, `userTerminalId` |
+| Terminal name | `serviceLineNickname`, else `vesselName` |
+| Current-cycle usage | `GET /vessels/{id}/data-usage/current` (bulk: `/vessels/data-usage/bulk/current`) → `priorityGB`, `standardGB`, `nonBillableGB`, `totalGB`, cycle dates |
+| Daily usage history | `GET /vessels/{id}/data-usage/history` → `historyPoints[]` (per day) |
+| Starlink plan | `GET /vessels/{id}/service-plan` → `planName`, `allocatedDataGB`, `priorityDataGB`, `standardDataGB`, `blockDataGB`, `topUpDataGB`, overage, cycle, auto-renew. `price` is **not shown to customers** (wholesale). |
+| Alerts | `GET /alerts/user-terminals` → `deviceId`, `alertName`, `alertDescription`, `active`, `firstSeen`, `lastSeen` (the previous code read non-existent `userTerminalId`/`endedAt`/`severity`) |
+
+**Unavailable from the current API** (shown as "Not available", never as 0):
+signal strength in dBm, link quality, 30-day uptime %, hardware health
+(power, temperature, voltage, antenna alignment, modem, SIM), upload vs
+download byte split, router alerts (spec: "currently unpopulated upstream").
+
+### Fixes made while integrating
+
+- Online status was `serviceLineActive && terminal.active` — i.e. "subscribed",
+  not "connected". It now comes from telemetry freshness.
+- `GET /vessels` hides inactive service lines unless `includeInactive=true`;
+  now always passed, so suspended customers' terminals don't disappear.
+- List views use fleet-wide bulk endpoints (one telemetry call, one usage
+  call, one location call) instead of five calls per vessel.
+- `lib/terminals/mockProvider.ts` (fabricated devices for any customer with an
+  ICCID) is now off unless `ENABLE_DEMO_TERMINALS=true`, and never serves the
+  customer portal.
+
+### WRITE operations
+
+All passthrough WRITE actions go through `executeSlashWrite()` in
+`lib/starlink/passthrough.ts`: the call fails unless both the HTTP status and
+the passthrough's inner `status_code` indicate success; every attempt is
+audited (`SLASH_WRITE_OPERATION` / `SLASH_WRITE_FAILED`), and each successful
+WRITE emails `service@stationsatcom.com` (override: `SLASH_WRITE_NOTIFY_EMAIL`)
+with operation, account numbers, service line, device/KIT, product,
+initiating user, UTC time and a portal reference. The only WRITE wired to the
+UI today is terminal reboot (`reboot_user_terminal`).

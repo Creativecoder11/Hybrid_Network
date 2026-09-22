@@ -64,6 +64,10 @@ export async function proxy(req: NextRequest) {
 
   const isLoggedOutOnlyRoute = LOGGED_OUT_ONLY_PREFIXES.some((p) => pathname.startsWith(p));
 
+  if (pathname.startsWith("/first-login-change-password") && !session) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
   if ((isAdminRoute || isPortalRoute) && !session) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", pathname);

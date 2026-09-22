@@ -137,7 +137,9 @@ export function parseGenericSheet(sheet: XLSX.WorkSheet): ParseResult {
       priceInvoiced: num(get(row, "priceInvoiced")),
 
       period: str(get(row, "period")),
-      cdrId: str(get(row, "cdrId")) || crypto.randomUUID(),
+      // Left empty when the file has no record id — lib/cdr/process.ts derives
+      // a content-based duplicate key instead of inventing a random id.
+      cdrId: str(get(row, "cdrId")),
       vendor: str(get(row, "vendor")),
       isFinal: Boolean(get(row, "isFinal")),
     });

@@ -1,20 +1,12 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/utils/format";
 import type { EnrichedAlert } from "@/lib/terminals/alerts";
-
-const SEVERITY_TONE: Record<string, BadgeTone> = {
-  CRITICAL: "red",
-  MAJOR: "red",
-  MINOR: "amber",
-  WARNING: "amber",
-  INFO: "blue",
-};
 
 export function PortalAlertsClient({ alerts }: { alerts: EnrichedAlert[] }) {
   const active = alerts.filter((a) => a.active);
@@ -39,21 +31,21 @@ export function PortalAlertsClient({ alerts }: { alerts: EnrichedAlert[] }) {
             <THead>
               <TR>
                 <TH>Device</TH>
-                <TH>Type</TH>
-                <TH>Message</TH>
-                <TH>Severity</TH>
+                <TH>Alert</TH>
+                <TH>Description</TH>
                 <TH>First Seen</TH>
+                <TH>Last Seen</TH>
                 <TH>Status</TH>
               </TR>
             </THead>
             <TBody>
-              {alerts.map((a, i) => (
-                <TR key={a.id ?? i}>
+              {alerts.map((a) => (
+                <TR key={a.id}>
                   <TD className="font-medium text-text-primary">{a.terminalLabel ?? "Unknown device"}</TD>
-                  <TD>{a.type ?? "—"}</TD>
-                  <TD className="max-w-xs truncate">{a.message ?? "—"}</TD>
-                  <TD>{a.severity ? <Badge tone={SEVERITY_TONE[a.severity.toUpperCase()] ?? "neutral"}>{a.severity}</Badge> : <span className="text-text-muted">Not reported</span>}</TD>
-                  <TD>{a.startedAt ? formatDateTime(a.startedAt) : "—"}</TD>
+                  <TD>{a.alertName}</TD>
+                  <TD className="max-w-xs truncate">{a.description || "—"}</TD>
+                  <TD>{a.firstSeen ? formatDateTime(a.firstSeen) : "—"}</TD>
+                  <TD>{a.lastSeen ? formatDateTime(a.lastSeen) : "—"}</TD>
                   <TD><Badge tone={a.active ? "red" : "neutral"}>{a.active ? "Active" : "Resolved"}</Badge></TD>
                 </TR>
               ))}

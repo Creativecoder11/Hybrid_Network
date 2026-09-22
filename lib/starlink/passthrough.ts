@@ -1,14 +1,29 @@
 import "server-only";
-import { starlinkFetch } from "./client";
+import crypto from "node:crypto";
+import { starlinkFetch, StarlinkApiError, describeStarlinkError } from "./client";
+import { connectDB } from "@/lib/db/connect";
+import { ActivityLog } from "@/models/ActivityLog";
+import { sendMail } from "@/lib/email/mailer";
+import { slashWriteOperationEmailHtml } from "@/emails/templates";
 
 // Typed wrappers for the Starlink WRITE passthrough
-// (https://slash.stationone.io/passthrough-docs — also a client-only SPA;
-// this catalog of 19 actions was recovered from its shipped JS bundle and
-// cross-checked against the OpenAPI operation at GET/PUT/POST/DELETE/PATCH
-// /starlink/{api_name}, whose body is models.PassthroughRequest).
+// (https://slash.stationone.io/passthrough-docs — a client-only SPA; the
+// catalog of actions was recovered from its shipped bundle and cross-checked
+// against the official OpenAPI operation {METHOD} /starlink/{api_name},
+// whose body is models.PassthroughRequest).
 //
-// Nothing in the app's UI calls these yet — commands stay local-only
-// (lib/terminals/service.ts) until write actions are explicitly wired up.
+// Every WRITE goes through executeSlashWrite(), which:
+//   1. calls the passthrough (server-side only; the API key never leaves the
+//      server and is never included in logs or emails),
+//   2. treats the call as failed unless both the HTTP status AND the
+//      passthrough's inner status_code indicate success,
+//   3. writes an ActivityLog audit entry (success or failure),
+//   4. on success, emails Station Satcom's billing team at
+//      service@stationsatcom.com (their requirement for every WRITE), with
+//      the customer / account / device / operation details they need.
+// The wrappers below all require a SlashWriteContext, so a WRITE can't be
+// sent without the notification.
+//
 // `update_product_post` from the catalog is intentionally omitted: the API
 // itself documents it as deprecated in favor of `updateProduct` below.
 
@@ -53,27 +68,141 @@ export type PassthroughResponse = {
   status_code: number;
 };
 
-export async function callPassthrough(
+/** Who/what a WRITE is for — included in the audit log and the Station Satcom email. */
+export type SlashWriteContext = {
+  operation: string;
+  initiatedBy: { id: string; name: string; email: string };
+  customerId?: string | null;
+  customerName?: string | null;
+  accountId?: string | null;
+  accountNumber?: string | null;
+  slashAccountNumber?: string | null;
+  serviceLineNumber?: string | null;
+  deviceId?: string | null;
+  kitSerialNumber?: string | null;
+  product?: string | null;
+};
+
+export class SlashWriteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SlashWriteError";
+  }
+}
+
+export function slashWriteNotifyAddress(): string {
+  return process.env.SLASH_WRITE_NOTIFY_EMAIL || "service@stationsatcom.com";
+}
+
+function isSuccess(res: PassthroughResponse | null | undefined): boolean {
+  if (!res || typeof res !== "object") return false;
+  const code = Number(res.status_code);
+  if (Number.isFinite(code) && code >= 400) return false;
+  const status = String(res.status ?? "").toLowerCase();
+  return !["error", "failed", "failure"].includes(status);
+}
+
+async function executeSlashWrite(
   apiName: PassthroughApiName,
   method: HttpMethod,
-  body: PassthroughRequestBody
+  body: PassthroughRequestBody,
+  ctx: SlashWriteContext
 ): Promise<PassthroughResponse> {
-  return starlinkFetch<PassthroughResponse>(`/starlink/${encodeURIComponent(apiName)}`, { method, body });
+  const reference = `HNW-${crypto.randomUUID()}`;
+  const occurredAt = new Date();
+  await connectDB();
+
+  const auditMeta = {
+    reference,
+    apiName,
+    method,
+    operation: ctx.operation,
+    accountNumber: ctx.accountNumber ?? null,
+    slashAccountNumber: ctx.slashAccountNumber ?? null,
+    serviceLineNumber: ctx.serviceLineNumber ?? null,
+    deviceId: ctx.deviceId ?? null,
+    kitSerialNumber: ctx.kitSerialNumber ?? null,
+    product: ctx.product ?? null,
+  };
+
+  let response: PassthroughResponse;
+  try {
+    response = await starlinkFetch<PassthroughResponse>(`/starlink/${encodeURIComponent(apiName)}`, { method, body });
+    if (!isSuccess(response)) {
+      throw new SlashWriteError(
+        `Starlink rejected ${apiName} (status ${response?.status_code ?? "?"}: ${response?.message ?? "no message"})`
+      );
+    }
+  } catch (err) {
+    console.error(`[slash-write] ${reference} ${apiName} failed: ${describeStarlinkError(err)}`);
+    await ActivityLog.create({
+      actor: ctx.initiatedBy.id,
+      targetCustomer: ctx.customerId ?? null,
+      targetAccount: ctx.accountId ?? null,
+      action: "SLASH_WRITE_FAILED",
+      meta: { ...auditMeta, error: describeStarlinkError(err) },
+    });
+    if (err instanceof StarlinkApiError || err instanceof SlashWriteError) throw err;
+    throw new SlashWriteError("The terminal provider did not accept the request.");
+  }
+
+  let notificationDelivered = false;
+  try {
+    const mail = await sendMail({
+      to: slashWriteNotifyAddress(),
+      subject: `[Hybrid Networks] SLASH WRITE: ${ctx.operation}${ctx.accountNumber ? ` — account ${ctx.accountNumber}` : ""}`,
+      html: slashWriteOperationEmailHtml({
+        operation: ctx.operation,
+        apiName,
+        status: `Accepted (HTTP ${response.status_code ?? 200}${response.status ? `, ${response.status}` : ""})`,
+        occurredAt: occurredAt.toISOString().replace("T", " ").slice(0, 19),
+        initiatedBy: `${ctx.initiatedBy.name} <${ctx.initiatedBy.email}>`,
+        customerName: ctx.customerName,
+        accountNumber: ctx.accountNumber,
+        slashAccountNumber: ctx.slashAccountNumber,
+        serviceLineNumber: ctx.serviceLineNumber,
+        deviceId: ctx.deviceId,
+        kitSerialNumber: ctx.kitSerialNumber,
+        product: ctx.product,
+        reference,
+      }),
+    });
+    notificationDelivered = mail.delivered;
+  } catch (err) {
+    // The WRITE itself succeeded; never report it as failed because the
+    // notification bounced — but make the missing email visible.
+    console.error(`[slash-write] ${reference} notification email to ${slashWriteNotifyAddress()} FAILED:`, err);
+  }
+
+  await ActivityLog.create({
+    actor: ctx.initiatedBy.id,
+    targetCustomer: ctx.customerId ?? null,
+    targetAccount: ctx.accountId ?? null,
+    action: "SLASH_WRITE_OPERATION",
+    meta: {
+      ...auditMeta,
+      upstreamStatus: response.status_code ?? null,
+      notifiedTo: slashWriteNotifyAddress(),
+      notificationDelivered,
+    },
+  });
+
+  return response;
 }
 
-export function removeRouterConfig(args: { vesselId: string; routerId: string }) {
-  return callPassthrough("remove_router_config", "DELETE", {
+export function removeRouterConfig(args: { vesselId: string; routerId: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("remove_router_config", "DELETE", {
     path_params: { vessel_id: args.vesselId },
     router_id: args.routerId,
-  });
+  }, ctx);
 }
 
-export function setRouterConfig(args: { vesselId: string; routerId: string; configId: string }) {
-  return callPassthrough("set_router_config", "PUT", {
+export function setRouterConfig(args: { vesselId: string; routerId: string; configId: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("set_router_config", "PUT", {
     path_params: { vessel_id: args.vesselId },
     router_id: args.routerId,
     config_id: args.configId,
-  });
+  }, ctx);
 }
 
 export function updateRouterConfig(args: {
@@ -81,19 +210,19 @@ export function updateRouterConfig(args: {
   configId: string;
   nickname?: string;
   routerConfigJson?: string;
-}) {
-  return callPassthrough("update_router_config", "PUT", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("update_router_config", "PUT", {
     path_params: { vessel_id: args.vesselId },
     config_id: args.configId,
     data: { nickname: args.nickname, routerConfigJson: args.routerConfigJson },
-  });
+  }, ctx);
 }
 
-export function rebootRouter(args: { vesselId: string; routerId: string }) {
-  return callPassthrough("reboot_router", "POST", {
+export function rebootRouter(args: { vesselId: string; routerId: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("reboot_router", "POST", {
     path_params: { vessel_id: args.vesselId },
     router_id: args.routerId,
-  });
+  }, ctx);
 }
 
 export function createServiceLine(args: {
@@ -101,15 +230,15 @@ export function createServiceLine(args: {
   addressReferenceId: string;
   productReferenceId: string;
   vesselName?: string;
-}) {
-  return callPassthrough("create_service_line", "POST", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("create_service_line", "POST", {
     path_params: { account_number: args.accountNumber },
     data: {
       vessel_name: args.vesselName,
       addressReferenceId: args.addressReferenceId,
       productReferenceId: args.productReferenceId,
     },
-  });
+  }, ctx);
 }
 
 export function deactivateServiceLine(args: {
@@ -117,38 +246,38 @@ export function deactivateServiceLine(args: {
   serviceLineNumber: string;
   endNow?: boolean;
   reasonForCancellation?: string;
-}) {
-  return callPassthrough("deactivate_service_line", "DELETE", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("deactivate_service_line", "DELETE", {
     path_params: { account_number: args.accountNumber, service_line_number: args.serviceLineNumber },
     query_params: {
       ...(args.endNow !== undefined ? { endNow: args.endNow } : {}),
       ...(args.reasonForCancellation ? { reasonForCancellation: args.reasonForCancellation } : {}),
     },
-  });
+  }, ctx);
 }
 
 export function setRecurringBlocks(args: {
   vesselId: string;
   recurringDataBlocks: { productId: string; count: number }[];
-}) {
-  return callPassthrough("set_recurring_blocks", "PUT", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("set_recurring_blocks", "PUT", {
     path_params: { vessel_id: args.vesselId },
     data: { recurringDataBlocks: args.recurringDataBlocks },
-  });
+  }, ctx);
 }
 
-export function addTopupData(args: { vesselId: string; productId: string; count: number }) {
-  return callPassthrough("add_topup_data", "POST", {
+export function addTopupData(args: { vesselId: string; productId: string; count: number }, ctx: SlashWriteContext) {
+  return executeSlashWrite("add_topup_data", "POST", {
     path_params: { vessel_id: args.vesselId },
     data: { productId: args.productId, count: args.count },
-  });
+  }, ctx);
 }
 
-export function updateServiceLineNickname(args: { vesselId: string; nickname: string }) {
-  return callPassthrough("update_service_line_nickname", "PUT", {
+export function updateServiceLineNickname(args: { vesselId: string; nickname: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("update_service_line_nickname", "PUT", {
     path_params: { vessel_id: args.vesselId },
     data: { nickname: args.nickname },
-  });
+  }, ctx);
 }
 
 export function updateProduct(args: {
@@ -156,69 +285,69 @@ export function updateProduct(args: {
   productReferenceId: string;
   recurringDataBlocks?: { productId: string; count: number }[];
   delayUpdate?: boolean | null;
-}) {
-  return callPassthrough("update_product_put", "PUT", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("update_product_put", "PUT", {
     path_params: { vessel_id: args.vesselId, product_reference_id: args.productReferenceId },
     data: {
       recurringDataBlocks: args.recurringDataBlocks,
       delayUpdate: args.delayUpdate,
     },
-  });
+  }, ctx);
 }
 
-export function serviceLineOptIn(args: { accountNumber: string; serviceLineNumber: string }) {
-  return callPassthrough("service_line_opt_in", "POST", {
+export function serviceLineOptIn(args: { accountNumber: string; serviceLineNumber: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("service_line_opt_in", "POST", {
     path_params: { account_number: args.accountNumber, service_line_number: args.serviceLineNumber },
-  });
+  }, ctx);
 }
 
-export function serviceLineOptOut(args: { accountNumber: string; serviceLineNumber: string }) {
-  return callPassthrough("service_line_opt_out", "DELETE", {
+export function serviceLineOptOut(args: { accountNumber: string; serviceLineNumber: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("service_line_opt_out", "DELETE", {
     path_params: { account_number: args.accountNumber, service_line_number: args.serviceLineNumber },
-  });
+  }, ctx);
 }
 
-export function setPublicIp(args: { accountNumber: string; serviceLineNumber: string; publicIp: boolean }) {
-  return callPassthrough("set_public_ip", "PUT", {
+export function setPublicIp(args: { accountNumber: string; serviceLineNumber: string; publicIp: boolean }, ctx: SlashWriteContext) {
+  return executeSlashWrite("set_public_ip", "PUT", {
     path_params: { account_number: args.accountNumber, service_line_number: args.serviceLineNumber },
     data: { publicIp: args.publicIp },
-  });
+  }, ctx);
 }
 
-export function createTerminal(args: { accountNumber: string; deviceId: string }) {
-  return callPassthrough("create_terminal", "POST", {
+export function createTerminal(args: { accountNumber: string; deviceId: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("create_terminal", "POST", {
     path_params: { account_number: args.accountNumber },
     device_id: args.deviceId,
-  });
+  }, ctx);
 }
 
-export function rebootUserTerminal(args: { vesselId: string; deviceId: string }) {
-  return callPassthrough("reboot_user_terminal", "POST", {
+export function rebootUserTerminal(args: { vesselId: string; deviceId: string }, ctx: SlashWriteContext) {
+  return executeSlashWrite("reboot_user_terminal", "POST", {
     path_params: { vessel_id: args.vesselId },
     device_id: args.deviceId,
-  });
+  }, ctx);
 }
 
 export function addTerminalToServiceLine(args: {
   accountNumber: string;
   serviceLineNumber: string;
   deviceId: string;
-}) {
-  return callPassthrough("add_terminal_to_service_line", "POST", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("add_terminal_to_service_line", "POST", {
     path_params: { account_number: args.accountNumber, service_line_number: args.serviceLineNumber },
     device_id: args.deviceId,
-  });
+  }, ctx);
 }
 
 export function removeTerminalFromServiceLine(args: {
   accountNumber: string;
   serviceLineNumber: string;
   deviceId: string;
-}) {
-  return callPassthrough("remove_terminal_from_service_line", "DELETE", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("remove_terminal_from_service_line", "DELETE", {
     path_params: { account_number: args.accountNumber, service_line_number: args.serviceLineNumber },
     device_id: args.deviceId,
-  });
+  }, ctx);
 }
 
 export function createAddress(args: {
@@ -233,8 +362,8 @@ export function createAddress(args: {
   administrativeArea?: string;
   region?: string;
   postalCode?: string;
-}) {
-  return callPassthrough("create_address", "POST", {
+}, ctx: SlashWriteContext) {
+  return executeSlashWrite("create_address", "POST", {
     path_params: { account_number: args.accountNumber },
     data: {
       addressLines: args.addressLines,
@@ -248,5 +377,5 @@ export function createAddress(args: {
       region: args.region,
       postalCode: args.postalCode,
     },
-  });
+  }, ctx);
 }

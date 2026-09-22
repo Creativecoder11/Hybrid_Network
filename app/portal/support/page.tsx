@@ -13,7 +13,7 @@ export default async function PortalSupportPage() {
   const user = await requireRole(["CUSTOMER"], "/admin");
 
   await connectDB();
-  const tickets = await SupportTicket.find({ customer: user.id }).sort({ createdAt: -1 }).lean();
+  const tickets = await SupportTicket.find({ customer: user.customerProfileId }).sort({ createdAt: -1 }).lean();
 
   const rows: TicketRow[] = tickets.map((t) => ({
     id: t._id.toString(),

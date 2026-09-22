@@ -1,15 +1,27 @@
 import "server-only";
 import crypto from "node:crypto";
-import type { HydratedDocument, Types } from "mongoose";
+import type { HydratedDocument } from "mongoose";
 import { connectDB } from "@/lib/db/connect";
 import { User, type UserDoc } from "@/models/User";
+import { CustomerAccount } from "@/models/CustomerAccount";
 import { ActivityLog } from "@/models/ActivityLog";
 import { hashPassword } from "@/lib/auth/password";
 import { sendMail } from "@/lib/email/mailer";
 import { temporaryCredentialsEmailHtml } from "@/emails/templates";
+import { formatDateTime } from "@/lib/utils/format";
+
+// Customer invitation workflow:
+//   admin creates the portal user -> sendCustomerInvitation() generates a
+//   temporary password (only its bcrypt hash is stored) and emails it ->
+//   the customer signs in -> is forced through /first-login-change-password
+//   -> the account becomes ACTIVE.
+// The plaintext password exists only in memory and in the email; it is never
+// logged, stored or returned to the admin UI.
+
+export const TEMP_PASSWORD_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
- * Generates a strong, human-readable temporary password (e.g. "HN-9kX2#mP8").
+ * Generates a strong, human-readable temporary password (e.g. "HN-9KX2#mp8a").
  */
 export function generateTemporaryPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -33,107 +45,71 @@ export function generateTemporaryPassword(): string {
   return `HN-${part1}${special}${part2}`;
 }
 
-/**
- * Checks if a customer needs temporary login credentials.
- * A customer needs credentials if:
- * 1. They have no passwordHash set yet, OR
- * 2. Their status is "INVITED" (never finished activating), OR
- * 3. They are currently flagged with mustChangePassword
- */
-export function customerNeedsCredentials(user: UserDoc): boolean {
-  if (user.status === "SUSPENDED") return false;
-  if (user.status === "INVITED") return true;
-  if (!user.passwordHash) return true;
-  if (user.mustChangePassword) return true;
-  return false;
+async function invitedAccountNumbers(user: HydratedDocument<UserDoc>): Promise<string[]> {
+  const profileId = user.customerProfile ?? user._id;
+  const filter: Record<string, unknown> = { customer: profileId, status: { $ne: "CLOSED" } };
+  if (user.accountAccessAll === false) filter._id = { $in: user.accountAccess ?? [] };
+  const accounts = await CustomerAccount.find(filter).select("accountNumber").sort({ accountNumber: 1 }).lean();
+  return accounts.map((a) => a.accountNumber);
 }
 
 /**
- * Issues a temporary password to a customer and emails the credentials to them.
+ * Issues a fresh temporary password to a customer portal user and emails the
+ * invitation. Used for new users and for re-invites (which invalidate any
+ * previous temporary password). Never used for users who already set their
+ * own password — they use "Forgot password" instead.
  */
-export async function sendTemporaryCredentialsToCustomer(
+export async function sendCustomerInvitation(
   user: HydratedDocument<UserDoc>,
-  options?: { actorId?: string; reason?: string }
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const tempPassword = generateTemporaryPassword();
-    const hashedPassword = await hashPassword(tempPassword);
+  options: { actorId: string; reason: "USER_CREATED" | "RE_INVITE" }
+): Promise<{ success: boolean; error?: string; delivered?: boolean }> {
+  if (user.role !== "CUSTOMER") return { success: false, error: "Only customer portal users are invited this way." };
+  if (user.status === "SUSPENDED") return { success: false, error: "Reactivate this user before re-inviting them." };
 
-    user.passwordHash = hashedPassword;
-    user.status = "ACTIVE";
+  try {
+    await connectDB();
+    const tempPassword = generateTemporaryPassword();
+    const expiresAt = new Date(Date.now() + TEMP_PASSWORD_TTL_MS);
+
+    user.passwordHash = await hashPassword(tempPassword);
+    user.status = "INVITED";
     user.mustChangePassword = true;
     user.tempPasswordIssuedAt = new Date();
+    user.tempPasswordExpiresAt = expiresAt;
     user.inviteTokenHash = null;
     user.inviteTokenExpiry = null;
     user.loginAttempts = 0;
     user.lockedUntil = null;
     await user.save();
 
+    const profile = user.customerProfile ? await User.findById(user.customerProfile).select("company name customerId").lean() : null;
     const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login`;
 
-    await sendMail({
+    const mail = await sendMail({
       to: user.email,
-      subject: "Your Hybrid Networks Portal Login Details",
+      subject: "Your Hybrid Networks Customer Portal invitation",
       html: temporaryCredentialsEmailHtml({
         name: user.name,
-        customerId: user.customerId,
+        companyName: profile ? profile.company || profile.name : user.company || null,
+        customerId: profile?.customerId ?? user.customerId,
         email: user.email,
         temporaryPassword: tempPassword,
         portalUrl,
+        expiresAt: formatDateTime(expiresAt),
+        accountNumbers: await invitedAccountNumbers(user),
       }),
     });
 
     await ActivityLog.create({
-      actor: options?.actorId ?? user._id,
-      targetCustomer: user._id,
-      action: "CREDENTIALS_SENT",
-      meta: {
-        event: "TEMPORARY_CREDENTIALS_DISPATCHED",
-        reason: options?.reason ?? "CDR_MATCH_ONBOARDING",
-        email: user.email,
-      },
+      actor: options.actorId,
+      targetCustomer: user.customerProfile ?? user._id,
+      action: options.reason === "RE_INVITE" ? "INVITE_RESENT" : "INVITE_SENT",
+      meta: { email: user.email, userId: user._id.toString(), expiresAt, delivered: mail.delivered },
     });
 
-    return { success: true };
+    return { success: true, delivered: mail.delivered };
   } catch (err) {
-    console.error("[temporaryCredentials] failed to issue credentials to", user.email, err);
-    return { success: false, error: err instanceof Error ? err.message : "Failed to issue credentials" };
+    console.error("[invitation] failed to invite", user.email, err);
+    return { success: false, error: "The invitation email could not be sent. Check SMTP settings and try again." };
   }
 }
-
-/**
- * Process a list of matched customer IDs (e.g. from CDR upload).
- * Finds customers who need credentials and sends temporary login details.
- */
-export async function processTemporaryCredentialsForCustomers(
-  customerIds: (string | Types.ObjectId)[],
-  options?: { actorId?: string; reason?: string }
-): Promise<{ dispatchedCount: number; errors: string[] }> {
-  if (customerIds.length === 0) return { dispatchedCount: 0, errors: [] };
-
-  await connectDB();
-  const uniqueIds = Array.from(new Set(customerIds.map((id) => id.toString())));
-
-  const customers = await User.find({
-    _id: { $in: uniqueIds },
-    role: "CUSTOMER",
-    status: { $ne: "SUSPENDED" },
-  }).select("+passwordHash");
-
-  let dispatchedCount = 0;
-  const errors: string[] = [];
-
-  for (const customer of customers) {
-    if (customerNeedsCredentials(customer)) {
-      const res = await sendTemporaryCredentialsToCustomer(customer, options);
-      if (res.success) {
-        dispatchedCount++;
-      } else if (res.error) {
-        errors.push(`${customer.email}: ${res.error}`);
-      }
-    }
-  }
-
-  return { dispatchedCount, errors };
-}
-

@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { Wifi, WifiOff, MapPin, AlertTriangle } from "lucide-react";
+import { MapPin, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { LabeledProgress } from "@/components/ui/ProgressBar";
+import { TerminalStatusDot } from "@/components/portal/TerminalStatusDot";
 import { formatDateTime, formatGB } from "@/lib/utils/format";
+import { fmtMbps, fmtMs, fmtPct, fmtText, fmtUptime } from "@/lib/utils/telemetry";
 import type { TerminalRecord, TerminalStatus } from "@/lib/terminals/types";
 
 const STATUS_TONE: Record<TerminalStatus, "green" | "amber" | "red" | "neutral" | "blue"> = {
@@ -15,46 +17,51 @@ const STATUS_TONE: Record<TerminalStatus, "green" | "amber" | "red" | "neutral" 
   CANCELLED: "red",
 };
 
-function Tile({ label, value }: { label: string; value: string }) {
+const SERVICE_LABEL: Record<TerminalStatus, string> = {
+  ACTIVE: "Service active",
+  INACTIVE: "Terminal inactive",
+  DEACTIVATED: "Deactivated",
+  SUSPENDED: "Service line inactive",
+  PENDING_ACTIVATION: "Pending activation",
+  CANCELLED: "Cancelled",
+};
+
+function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-line bg-surface-raised p-3.5">
+    <div className="rounded-xl border border-line bg-surface-raised p-3.5" title={hint}>
       <p className="text-xs text-text-muted">{label}</p>
       <p className="mt-1 text-sm font-semibold text-text-primary">{value}</p>
     </div>
   );
 }
 
-export function DeviceCard({ terminal }: { terminal: TerminalRecord }) {
+export function DeviceCard({ terminal, showLocation }: { terminal: TerminalRecord; showLocation: boolean }) {
   const openFaults = terminal.faults.filter((f) => f.status === "OPEN");
   const usedGB = terminal.planBilling.monthlyUsageGB;
   const allowanceGB = terminal.planBilling.planAllowanceGB;
+  const online = terminal.live.onlineStatus === "ONLINE";
+  const name = terminal.activation.displayName || terminal.product.model;
 
   return (
     <Card>
       <CardContent className="pt-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <p className="text-base font-semibold text-text-primary">{terminal.product.model}</p>
-              <Badge tone={STATUS_TONE[terminal.status]}>{terminal.status.replace(/_/g, " ")}</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <p className="text-base font-semibold text-text-primary">{name}</p>
+              <TerminalStatusDot status={terminal.live.onlineStatus} />
             </div>
             <p className="mt-1 text-xs text-text-muted">
-              {terminal.product.manufacturer} · Serial {terminal.identification.serialNumber} · ICCID{" "}
-              {terminal.identification.iccid}
+              Kit {terminal.identification.serialNumber}
+              {terminal.identification.hardwareId ? ` · Dish ${terminal.identification.hardwareId}` : ""}
+              {terminal.activation.serviceLineNumber ? ` · Line ${terminal.activation.serviceLineNumber}` : ""}
             </p>
+            <p className="mt-0.5 text-xs text-text-muted">{terminal.live.statusReason}</p>
           </div>
           <div className="flex items-center gap-2">
-            {terminal.live.onlineStatus === "ONLINE" ? (
-              <Badge tone="green">
-                <Wifi className="size-3" /> Online
-              </Badge>
-            ) : (
-              <Badge tone="neutral">
-                <WifiOff className="size-3" /> Offline
-              </Badge>
-            )}
+            <Badge tone={STATUS_TONE[terminal.status]}>{SERVICE_LABEL[terminal.status]}</Badge>
             <Link
-              href={`/portal/devices/${terminal.id}`}
+              href={`/portal/devices/${encodeURIComponent(terminal.id)}`}
               className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-raised"
             >
               View Details
@@ -73,45 +80,56 @@ export function DeviceCard({ terminal }: { terminal: TerminalRecord }) {
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Tile label="Signal" value={terminal.live.onlineStatus === "ONLINE" ? `${terminal.live.signalStrengthDbm} dBm` : "--"} />
-          <Tile label="Signal Quality" value={terminal.live.onlineStatus === "ONLINE" ? `${terminal.live.signalQualityPct}%` : "--"} />
-          <Tile label="Link Quality" value={terminal.network.linkQuality} />
-          <Tile label="Last Seen" value={formatDateTime(terminal.live.lastSeenAt)} />
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Tile label="Signal Quality" value={online ? fmtPct(terminal.live.signalQualityPct) : "--"} />
+          <Tile
+            label="Throughput"
+            value={
+              online && (terminal.network.downlinkThroughputMbps !== null || terminal.network.uplinkThroughputMbps !== null)
+                ? `↓ ${fmtMbps(terminal.network.downlinkThroughputMbps)} · ↑ ${fmtMbps(terminal.network.uplinkThroughputMbps)}`
+                : online
+                  ? "Not available"
+                  : "--"
+            }
+            hint={terminal.network.measuredAt ? `Measured ${formatDateTime(terminal.network.measuredAt)}` : undefined}
+          />
+          <Tile label="Latency" value={online ? fmtMs(terminal.network.latencyMs) : "--"} />
+          <Tile label="Firmware" value={fmtText(terminal.product.firmwareVersion)} />
+          <Tile label="Uptime" value={online ? fmtUptime(terminal.network.uptimeSeconds) : "--"} />
+          <Tile label="Last Seen" value={terminal.live.lastSeenAt ? formatDateTime(terminal.live.lastSeenAt) : "Never"} />
         </div>
 
         <div className="mt-4">
           <LabeledProgress
-            label="Data Used This Period"
+            label="Service line data this cycle"
             value={usedGB}
             max={allowanceGB ?? Math.max(1, usedGB)}
-            displayValue={allowanceGB ? `${formatGB(usedGB * 1e9)} / ${allowanceGB} GB` : `${formatGB(usedGB * 1e9)} · Unlimited`}
+            displayValue={allowanceGB ? `${formatGB(usedGB * 1e9)} / ${allowanceGB} GB` : formatGB(usedGB * 1e9)}
             tone={allowanceGB && usedGB > allowanceGB ? "red" : "green"}
           />
         </div>
 
-        {terminal.location && (
+        {showLocation && (
           <div className="mt-4 flex items-center gap-2 text-xs text-text-secondary">
             <MapPin className="size-3.5 text-accent-green" />
-            {terminal.location.latitude.toFixed(4)}, {terminal.location.longitude.toFixed(4)} · updated{" "}
-            {formatDateTime(terminal.location.timestamp)}
+            {terminal.location ? (
+              <>
+                {terminal.location.latitude.toFixed(4)}, {terminal.location.longitude.toFixed(4)} · updated{" "}
+                {formatDateTime(terminal.location.timestamp)}
+              </>
+            ) : (
+              <span className="text-text-muted">No GPS location reported yet</span>
+            )}
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-4 text-xs text-text-secondary">
-          <div>
-            <p className="text-text-muted">Power</p>
-            <p className="mt-0.5 font-medium text-text-primary">{terminal.health.powerStatus}</p>
-          </div>
-          <div>
-            <p className="text-text-muted">SIM</p>
-            <p className="mt-0.5 font-medium text-text-primary">{terminal.health.simStatus.replace(/_/g, " ")}</p>
-          </div>
-          <div>
-            <p className="text-text-muted">Firmware</p>
-            <p className="mt-0.5 font-medium text-text-primary">{terminal.health.firmwareStatus.replace(/_/g, " ")}</p>
-          </div>
-        </div>
+        {online && (terminal.network.downlinkThroughputMbps !== null || terminal.network.uplinkThroughputMbps !== null) && (
+          <p className="mt-3 flex items-center gap-3 text-[11px] text-text-muted">
+            <span className="flex items-center gap-1"><ArrowDown className="size-3" /> downlink</span>
+            <span className="flex items-center gap-1"><ArrowUp className="size-3" /> uplink</span>
+            {terminal.network.measuredAt && <span>· measured {formatDateTime(terminal.network.measuredAt)}</span>}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

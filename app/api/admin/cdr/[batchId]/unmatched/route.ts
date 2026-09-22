@@ -1,43 +1,56 @@
 import { NextResponse } from "next/server";
-import Papa from "papaparse";
+import mongoose from "mongoose";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { connectDB } from "@/lib/db/connect";
+import { CdrBatch } from "@/models/CdrBatch";
 import { CdrRecord } from "@/models/CdrRecord";
+import { reasonLabel } from "@/lib/cdr/allocation";
+import { toCsv, safeFileName } from "@/lib/reports/csv";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ batchId: string }> }
-) {
+// Unallocated Report for a usage (Rated CDR) upload.
+export async function GET(_request: Request, { params }: { params: Promise<{ batchId: string }> }) {
   const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
   if (!admin) {
     return NextResponse.json({ success: false, error: "Not authorized." }, { status: 403 });
   }
 
   const { batchId } = await params;
+  if (!mongoose.isValidObjectId(batchId)) {
+    return NextResponse.json({ success: false, error: "Upload not found." }, { status: 404 });
+  }
   await connectDB();
 
-  const records = await CdrRecord.find({ cdrBatch: batchId, matched: false }).lean();
+  const batch = await CdrBatch.findById(batchId).lean();
+  if (!batch) return NextResponse.json({ success: false, error: "Upload not found." }, { status: 404 });
 
-  const csv = Papa.unparse(
+  const records = await CdrRecord.find({ cdrBatch: batchId, allocationStatus: "UNALLOCATED" }).sort({ startCdr: 1 }).lean();
+
+  const csv = toCsv(
     records.map((r) => ({
-      "Cdr ID": r.cdrId,
+      "Upload ID": batchId,
+      "File Name": batch.fileName,
+      "Original Record ID (Cdr ID)": r.cdrId?.startsWith("row:") ? "" : r.cdrId,
       "Customer Code": r.customerCode,
+      "Product Code": r.prod,
+      "Record Type / Service": r.service,
+      "Date / Time": r.startCdr ? new Date(r.startCdr).toISOString() : "",
+      Period: r.period,
       ICCID: r.iccid,
       "Card Name": r.cardName,
-      Service: r.service,
-      Vendor: r.vendor,
-      Period: r.period,
-      "Start CDR": r.startCdr ? new Date(r.startCdr).toISOString() : "",
       "Volume Data (Bytes)": r.volumeDataBytes,
-      "Volume Total (Bytes)": r.volumeTotalBytes,
       "CDR Price Total": r.priceTotal,
+      Currency: r.priceCurrency,
+      "Reason Code": r.unallocatedReasonCode || "",
+      Reason: reasonLabel(r.unallocatedReasonCode),
+      Details: r.unallocatedReason || "",
+      Status: "UNALLOCATED",
     }))
   );
 
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="unmatched-cdr-${batchId}.csv"`,
+      "Content-Disposition": `attachment; filename="unallocated-report-${safeFileName(batch.fileName)}.csv"`,
     },
   });
 }

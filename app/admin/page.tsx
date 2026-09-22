@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DollarSign, Receipt, Users, UserCheck, UploadCloud, ArrowRight, Satellite, AlertTriangle } from "lucide-react";
+import { ArrowRight, Satellite, AlertTriangle } from "lucide-react";
 import { requireRole } from "@/lib/auth/dal";
 import { getAdminDashboardStats } from "@/lib/dashboard/adminStats";
 import { listTerminals } from "@/lib/terminals/service";
@@ -39,7 +39,7 @@ export default async function AdminDashboardPage() {
   const fleet = computeFleetOverview(terminals);
   const recentAlerts = [...alerts]
     .filter((a) => a.active)
-    .sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""))
+    .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""))
     .slice(0, 5);
 
   const maxPlanRevenue = Math.max(1, ...stats.revenueByPlan.map((p) => p.total));
@@ -285,19 +285,19 @@ export default async function AdminDashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-line bg-surface-raised p-3.5">
                 <p className="text-xs text-text-muted">Avg Latency</p>
-                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgLatencyMs} ms</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgLatencyMs === null ? "Not available" : `${fleet.connectivity.avgLatencyMs} ms`}</p>
               </div>
               <div className="rounded-xl border border-line bg-surface-raised p-3.5">
                 <p className="text-xs text-text-muted">Avg Signal Quality</p>
-                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgSignalQualityPct}%</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgSignalQualityPct === null ? "Not available" : `${fleet.connectivity.avgSignalQualityPct}%`}</p>
               </div>
               <div className="rounded-xl border border-line bg-surface-raised p-3.5">
                 <p className="text-xs text-text-muted">Avg Throughput</p>
-                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgThroughputMbps} Mbps</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgThroughputMbps === null ? "Not available" : `${fleet.connectivity.avgThroughputMbps} Mbps`}</p>
               </div>
               <div className="rounded-xl border border-line bg-surface-raised p-3.5">
                 <p className="text-xs text-text-muted">Avg Uptime</p>
-                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgUptimePct}%</p>
+                <p className="mt-1 text-lg font-semibold text-text-primary">{fleet.connectivity.avgUptimePct === null ? "Not available" : `${fleet.connectivity.avgUptimePct}%`}</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-text-muted">
@@ -343,14 +343,14 @@ export default async function AdminDashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentAlerts.map((a, i) => (
-                  <div key={a.id ?? i} className="border-b border-line-soft pb-3 last:border-0 last:pb-0">
+                {recentAlerts.map((a) => (
+                  <div key={a.id} className="border-b border-line-soft pb-3 last:border-0 last:pb-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-text-primary">{a.type ?? "Alert"}</p>
+                      <p className="text-sm font-medium text-text-primary">{a.alertName}</p>
                       <Badge tone="red">Active</Badge>
                     </div>
                     <p className="text-xs text-text-muted">{a.terminalLabel ?? "Unknown device"}</p>
-                    <p className="text-xs text-text-muted">First seen {a.startedAt ? formatDateTime(a.startedAt) : "—"}</p>
+                    <p className="text-xs text-text-muted">First seen {a.firstSeen ? formatDateTime(a.firstSeen) : "—"}</p>
                   </div>
                 ))}
               </div>

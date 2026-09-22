@@ -17,16 +17,33 @@ const FORMATS = [
   { format: "xlsx", label: "Excel" },
 ];
 
-export function PortalReportsClient() {
+export function PortalReportsClient({
+  accountNumber,
+  locationEnabled,
+}: {
+  accountNumber: string | null;
+  locationEnabled: boolean;
+}) {
+  // GPS history is only offered while device location is enabled (the export
+  // route refuses it otherwise).
+  const reports = REPORTS.filter((r) => r.type !== "gps" || locationEnabled);
   return (
     <div className="space-y-6">
       <div>
         <p className="text-xl font-bold text-text-primary">Reports</p>
-        <p className="text-sm text-text-muted">Download your own account&apos;s terminal data.</p>
+        <p className="text-sm text-text-muted">
+          {accountNumber ? (
+            <>
+              Download terminal data for account <span className="font-mono">{accountNumber}</span>.
+            </>
+          ) : (
+            "No Customer Account is assigned to your login yet."
+          )}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {REPORTS.map((r) => (
+        {reports.map((r) => (
           <Card key={r.type}>
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">

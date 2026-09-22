@@ -57,6 +57,10 @@ const UserSchema = new Schema(
 
     mustChangePassword: { type: Boolean, default: false },
     tempPasswordIssuedAt: { type: Date, default: null },
+    // A temporary (invitation) password stops working after this date; the
+    // admin re-invites to issue a fresh one.
+    tempPasswordExpiresAt: { type: Date, default: null },
+    lastLoginAt: { type: Date, default: null },
 
     address: { type: String, default: "" },
     company: { type: String, default: "" },
@@ -68,6 +72,9 @@ const UserSchema = new Schema(
     accountType: { type: String, enum: ACCOUNT_TYPES, default: null },
     contactPerson: { type: String, default: "" },
     nidTradeLicense: { type: String, default: "" },
+    // Legacy single Customer Code. Customer Codes now live on CustomerAccount
+    // (models/CustomerAccount.ts) so one profile can own several accounts;
+    // this field is kept only so existing data can be migrated from it.
     customerCode: { type: String, unique: true, sparse: true, index: true },
     cardName: { type: String, default: "", index: true },
     iccid: { type: String, default: "", index: true },
@@ -81,12 +88,29 @@ const UserSchema = new Schema(
     starlinkVesselId: { type: String, default: "", index: true },
     starlinkServiceLineNumber: { type: String, default: "" },
     network: { type: NetworkInfoSchema, default: () => ({}) },
+
+    // Portal users. A CUSTOMER user with customerProfile = null IS the
+    // Customer Profile (and its primary login). Additional logins for the same
+    // company are CUSTOMER users whose customerProfile points at that profile.
+    customerProfile: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    // Which of the profile's Customer Accounts this login may see.
+    // accountAccessAll = true also covers accounts added later.
+    accountAccessAll: { type: Boolean, default: true },
+    accountAccess: { type: [{ type: Schema.Types.ObjectId, ref: "CustomerAccount" }], default: [] },
   },
   { timestamps: true }
 );
 
 UserSchema.index({ role: 1, status: 1 });
+UserSchema.index({ role: 1, customerProfile: 1 });
 UserSchema.index({ createdAt: -1 });
+
+/**
+ * Matches Customer Profiles only (not the additional portal users that belong
+ * to a profile). `customerProfile: null` also matches documents created before
+ * the field existed.
+ */
+export const CUSTOMER_PROFILE_FILTER = { role: "CUSTOMER", customerProfile: null } as const;
 
 export type UserDoc = InferSchemaType<typeof UserSchema>;
 

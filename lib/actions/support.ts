@@ -37,9 +37,12 @@ export async function createTicketAction(
   await connectDB();
   const ticketNumber = await generateTicketNumber();
 
+  // Tickets belong to the Customer Profile, so every portal user of the same
+  // company sees them.
+  const customerId = user.customerProfileId ?? user.id;
   await SupportTicket.create({
     ticketNumber,
-    customer: user.id,
+    customer: customerId,
     subject: parsed.data.subject,
     message: parsed.data.message,
     category: parsed.data.category,
@@ -48,7 +51,7 @@ export async function createTicketAction(
 
   await ActivityLog.create({
     actor: user.id,
-    targetCustomer: user.id,
+    targetCustomer: customerId,
     action: "TICKET_CREATED",
     meta: { ticketNumber },
   });
@@ -76,7 +79,7 @@ export async function replyTicketAction(
   await connectDB();
   const ticket = await SupportTicket.findById(parsed.data.ticketId);
   if (!ticket) return { error: "Ticket not found." };
-  if (user.role === "CUSTOMER" && ticket.customer.toString() !== user.id) {
+  if (user.role === "CUSTOMER" && ticket.customer.toString() !== user.customerProfileId) {
     return { error: "You're not authorized to reply to this ticket." };
   }
 

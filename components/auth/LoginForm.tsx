@@ -44,6 +44,7 @@ export function LoginForm({
   const [showPassword, setShowPassword] = useState(false);
   const searchParams = useSearchParams();
   const resetSuccess = searchParams.get("reset") === "success";
+  const inactiveNotice = searchParams.get("notice") === "inactive";
 
   const isAdmin = portalMode === "admin";
   const isCustomer = portalMode === "customer";
@@ -85,6 +86,13 @@ export function LoginForm({
         <div className="mt-5 flex items-center gap-2 rounded-xl border border-accent-green/30 bg-accent-green/10 px-3.5 py-2.5 text-xs text-accent-green">
           <CheckCircle2 className="size-4 shrink-0" />
           Your password has been reset. Sign in with your new password.
+        </div>
+      )}
+
+      {inactiveNotice && (
+        <div className="mt-5 rounded-xl border border-amber/30 bg-amber/10 px-3.5 py-2.5 text-xs text-amber">
+          You have been signed out because your account is no longer active. Contact your administrator if you
+          think this is a mistake.
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ACCOUNT_TYPES } from "@/models/User";
+import { accountNumberField } from "@/lib/validations/account";
 
 export const networkInfoSchema = z.object({
   originNumber: z.string().optional().default(""),
@@ -23,7 +24,9 @@ export const createCustomerSchema = z.object({
   accountType: z.enum(ACCOUNT_TYPES).optional().nullable(),
   contactPerson: z.string().optional().default(""),
   nidTradeLicense: z.string().optional().default(""),
-  customerCode: z.string().optional().default(""),
+  // Initial Customer Account numbers (create only). Accounts are managed
+  // individually afterwards (lib/actions/accounts.ts).
+  accountNumbers: z.array(accountNumberField).max(20).optional().default([]),
   cardName: z.string().optional().default(""),
   iccid: z.string().optional().default(""),
   imei: z.string().optional().default(""),
@@ -47,6 +50,7 @@ export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
 export const manualUsageSchema = z.object({
   customerId: z.string().min(1),
+  customerAccountId: z.string().regex(/^[a-f0-9]{24}$/i, "Choose a Customer Account"),
   periodMonth: z.string().regex(/^\d{6}$/, "Format must be YYYYMM"),
   volumeDataBytes: z.coerce.number().min(0).optional(),
   volumeMin: z.coerce.number().min(0).optional(),

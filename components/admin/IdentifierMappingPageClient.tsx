@@ -26,6 +26,16 @@ export type UnmappedIdentifierRow = {
   recordCount: number;
   totalWholesaleAmount: number;
   currency: string;
+  /** The code exists and is active but has no Retail Plan (retail pricing). */
+  hasPricingOnly: boolean;
+};
+
+const TYPE_LABEL: Record<CdrIdentifierMappingRow["productType"], string> = {
+  CALL: "Call",
+  SMS: "SMS",
+  DATA: "Data",
+  SERVICE: "Service",
+  OTHER: "Other",
 };
 
 export function IdentifierMappingPageClient({
@@ -55,7 +65,10 @@ export function IdentifierMappingPageClient({
       if (statusFilter === "INACTIVE" && m.isActive) return false;
       if (!needle) return true;
       return (
-        m.identifier.toLowerCase().includes(needle) || m.retailPlanName.toLowerCase().includes(needle)
+        m.identifier.toLowerCase().includes(needle) ||
+        m.name.toLowerCase().includes(needle) ||
+        m.category.toLowerCase().includes(needle) ||
+        m.retailPlanName.toLowerCase().includes(needle)
       );
     });
   }, [mappings, search, statusFilter]);
@@ -94,12 +107,15 @@ export function IdentifierMappingPageClient({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-2xl font-bold text-text-primary">Identifier Mapping</p>
-          <p className="text-sm">Map each CDR identifier to the Retail Plan used to price it.</p>
+          <p className="text-2xl font-bold text-text-primary">Product Codes</p>
+          <p className="text-sm">
+            CDR records are allocated only when their Product Code is listed and active here. Optionally link a Retail
+            Plan to price the product in retail CDR imports.
+          </p>
         </div>
         <Button onClick={() => openCreate()}>
           <Plus className="size-4" />
-          Map Identifier
+          Add Product Code
         </Button>
       </div>
 
@@ -108,7 +124,7 @@ export function IdentifierMappingPageClient({
           <CardContent className="pt-5">
             <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber">
               <AlertTriangle className="size-3.5" />
-              Unmapped Identifiers ({unmapped.length})
+              Product Codes blocking allocation ({unmapped.length})
             </p>
             <div className="space-y-2">
               {unmapped.map((u) => (
@@ -119,13 +135,27 @@ export function IdentifierMappingPageClient({
                   <div>
                     <p className="font-mono text-sm font-semibold text-text-primary">{u.identifier}</p>
                     <p className="text-xs text-text-muted">
-                      {u.recordCount} unmatched record{u.recordCount === 1 ? "" : "s"} · {u.totalWholesaleAmount.toFixed(2)}{" "}
-                      {u.currency} wholesale
+                      {u.recordCount} unallocated record{u.recordCount === 1 ? "" : "s"}
+                      {u.totalWholesaleAmount > 0 ? ` · ${u.totalWholesaleAmount.toFixed(2)} ${u.currency} wholesale` : ""}
+                      {u.hasPricingOnly ? " · needs a Retail Plan" : ""}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => openCreate(u.identifier)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const existing = u.hasPricingOnly
+                        ? mappings.find((m) => m.isActive && m.identifier.toLowerCase() === u.identifier.toLowerCase())
+                        : undefined;
+                      if (existing) {
+                        setEditingMapping(existing);
+                        setPrefillIdentifier(undefined);
+                        setModalOpen(true);
+                      } else openCreate(u.identifier);
+                    }}
+                  >
                     <Link2Off className="size-3.5" />
-                    Map Now
+                    {u.hasPricingOnly ? "Set Pricing" : "Add Code"}
                   </Button>
                 </div>
               ))}
@@ -138,7 +168,7 @@ export function IdentifierMappingPageClient({
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Input
             icon={<Search className="size-4" />}
-            placeholder="Search identifier or plan..."
+            placeholder="Search code, name, category or plan..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="sm:w-72"
@@ -153,12 +183,12 @@ export function IdentifierMappingPageClient({
         {filtered.length === 0 ? (
           <EmptyState
             icon={Link2Off}
-            title="No mappings found"
-            description="Map a CDR identifier to a Retail Plan to start pricing matching CDR rows."
+            title="No Product Codes found"
+            description="Add the Product Codes that appear on your CDR files. Records with unknown codes stay unallocated."
             action={
               <Button size="sm" onClick={() => openCreate()}>
                 <Plus className="size-4" />
-                Map Identifier
+                Add Product Code
               </Button>
             }
           />
@@ -167,9 +197,10 @@ export function IdentifierMappingPageClient({
             <Table>
               <THead>
                 <TR>
-                  <TH>Identifier</TH>
-                  <TH>Retail Plan</TH>
-                  <TH>Pricing</TH>
+                  <TH>Product Code</TH>
+                  <TH>Name / Category</TH>
+                  <TH>Type</TH>
+                  <TH>Pricing (Retail Plan)</TH>
                   <TH>Status</TH>
                   <TH>Updated</TH>
                   <TH className="text-right">Action</TH>
@@ -180,14 +211,27 @@ export function IdentifierMappingPageClient({
                   <TR key={m.id}>
                     <TD className="font-mono text-sm font-medium text-text-primary">{m.identifier}</TD>
                     <TD>
-                      <p className="text-text-primary">{m.retailPlanName}</p>
-                      {!m.retailPlanActive && (
-                        <Badge tone="amber" className="mt-1">
-                          Plan inactive
-                        </Badge>
+                      <p className="text-text-primary">{m.name || "--"}</p>
+                      {m.category && <p className="text-xs text-text-muted">{m.category}</p>}
+                    </TD>
+                    <TD>
+                      <Badge tone="blue">{TYPE_LABEL[m.productType]}</Badge>
+                    </TD>
+                    <TD>
+                      {m.retailPlanId ? (
+                        <>
+                          <p className="text-text-primary">{m.retailPlanName}</p>
+                          <p className="text-xs text-text-secondary">{m.pricingValueLabel}</p>
+                          {!m.retailPlanActive && (
+                            <Badge tone="amber" className="mt-1">
+                              Plan inactive
+                            </Badge>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-text-muted">No pricing rule</span>
                       )}
                     </TD>
-                    <TD className="text-text-secondary">{m.pricingValueLabel}</TD>
                     <TD>
                       <Switch checked={m.isActive} onChange={() => handleToggle(m)} disabled={busyId === m.id} />
                     </TD>
@@ -240,8 +284,8 @@ export function IdentifierMappingPageClient({
 
       <DeleteConfirmModal
         open={!!deleteTarget}
-        title={`Delete mapping for "${deleteTarget?.identifier ?? ""}"?`}
-        description="This mapping will be permanently deleted. Already-processed CDR charge records keep their original pricing snapshot."
+        title={`Delete Product Code "${deleteTarget?.identifier ?? ""}"?`}
+        description="The code will be permanently deleted (deactivate it instead to keep history). Already-processed CDR records keep their original allocation and pricing snapshot; new records with this code become unallocated."
         loading={!!deleteTarget && busyId === deleteTarget.id}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDelete}

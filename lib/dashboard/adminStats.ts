@@ -1,6 +1,6 @@
 import "server-only";
 import { connectDB } from "@/lib/db/connect";
-import { User } from "@/models/User";
+import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
 import { Invoice } from "@/models/Invoice";
 import { Subscription } from "@/models/Subscription";
 import { UsageRecord } from "@/models/UsageRecord";
@@ -41,9 +41,9 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     currentPeriodInvoices,
     planRevenueAgg,
   ] = await Promise.all([
-    User.countDocuments({ role: "CUSTOMER" }),
-    User.countDocuments({ role: "CUSTOMER", createdAt: { $lt: currentMonthStart } }),
-    User.countDocuments({ role: "CUSTOMER", status: "ACTIVE" }),
+    User.countDocuments(CUSTOMER_PROFILE_FILTER),
+    User.countDocuments({ ...CUSTOMER_PROFILE_FILTER, createdAt: { $lt: currentMonthStart } }),
+    User.countDocuments({ ...CUSTOMER_PROFILE_FILTER, status: "ACTIVE" }),
     Invoice.aggregate([
       { $match: { status: "PAID", paidDate: { $gte: currentMonthStart } } },
       { $group: { _id: null, total: { $sum: "$total" } } },

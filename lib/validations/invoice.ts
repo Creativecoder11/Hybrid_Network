@@ -9,6 +9,7 @@ export const lineItemSchema = z.object({
 
 export const createInvoiceSchema = z.object({
   customerId: z.string().min(1),
+  customerAccountId: z.string().optional().nullable(),
   subscriptionId: z.string().optional().nullable(),
   periodMonth: z.string().regex(/^\d{6}$/, "Format must be YYYYMM"),
   dueDate: z.string().min(1),

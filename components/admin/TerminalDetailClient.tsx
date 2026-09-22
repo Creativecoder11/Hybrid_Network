@@ -6,8 +6,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  Wifi,
-  WifiOff,
   MapPin,
   Power,
   RefreshCw,
@@ -26,6 +24,8 @@ import { formatDateTime, formatGB } from "@/lib/utils/format";
 import { LocationMap } from "@/components/ui/LocationMap";
 import { FreshnessIndicator } from "@/components/ui/FreshnessIndicator";
 import { usePolling } from "@/lib/hooks/usePolling";
+import { TerminalStatusDot } from "@/components/portal/TerminalStatusDot";
+import { fmtDbm, fmtMbps, fmtMs, fmtPct, fmtText, fmtUptime, NOT_AVAILABLE } from "@/lib/utils/telemetry";
 import type { RemoteCommandType, TerminalRecord, TerminalStatus, TerminalAuditEntry } from "@/lib/terminals/types";
 
 const STATUS_TONE: Record<TerminalStatus, "green" | "amber" | "red" | "neutral" | "blue"> = {
@@ -82,7 +82,14 @@ export function TerminalDetailClient({
 
   async function runCommand(command: RemoteCommandType) {
     if (command === "SUSPEND" && !confirm("Suspend this terminal's service?")) return;
-    if (command === "REBOOT" && isLive && !confirm("This will reboot the physical terminal via the SLASH API. Continue?")) return;
+    if (
+      command === "REBOOT" &&
+      isLive &&
+      !confirm(
+        "This reboots the physical terminal via the SLASH WRITE API. Station Satcom (service@stationsatcom.com) is emailed automatically. Continue?"
+      )
+    )
+      return;
     setPendingCommand(command);
     const result = await sendTerminalCommandAction(terminal.id, command);
     setPendingCommand(null);
@@ -108,27 +115,28 @@ export function TerminalDetailClient({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-xl font-bold text-text-primary">{terminal.identification.serialNumber}</p>
+            <p className="text-xl font-bold text-text-primary">
+              {terminal.activation.displayName || terminal.identification.serialNumber}
+            </p>
             <Badge tone={STATUS_TONE[terminal.status]}>{terminal.status.replace(/_/g, " ")}</Badge>
-            {terminal.live.onlineStatus === "ONLINE" ? (
-              <Badge tone="green">
-                <Wifi className="size-3" /> Online
-              </Badge>
-            ) : (
-              <Badge tone="neutral">
-                <WifiOff className="size-3" /> Offline
-              </Badge>
-            )}
+            <TerminalStatusDot status={terminal.live.onlineStatus} />
+            {terminal.dataSource === "DEMO" && <Badge tone="amber">Demo data</Badge>}
             {openFaults.length > 0 && <Badge tone="red">{openFaults.length} open fault{openFaults.length === 1 ? "" : "s"}</Badge>}
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            {terminal.product.manufacturer} {terminal.product.model} · ICCID {terminal.identification.iccid} ·{" "}
-            {terminal.activation.assignedCustomerName ? (
-              <>Assigned to <span className="text-accent-green">{terminal.activation.assignedCustomerName}</span></>
+            {terminal.product.manufacturer} {terminal.product.model} · Kit {terminal.identification.serialNumber} ·{" "}
+            {terminal.activation.assignedCustomerId ? (
+              <>
+                Account{" "}
+                <Link href={`/admin/customers/${terminal.activation.assignedCustomerId}`} className="text-accent-green hover:underline">
+                  {terminal.activation.assignedAccountNumber ?? "?"} · {terminal.activation.assignedCustomerName}
+                </Link>
+              </>
             ) : (
-              "Unassigned inventory"
+              <span className="text-amber">Not linked to a Customer Account</span>
             )}
           </p>
+          <p className="mt-0.5 text-xs text-text-muted">{terminal.live.statusReason}</p>
         </div>
       </div>
 
@@ -161,7 +169,7 @@ export function TerminalDetailClient({
                     <InfoRow label="Model" value={terminal.product.model} />
                     <InfoRow label="Manufacturer" value={terminal.product.manufacturer} />
                     <InfoRow label="Hardware Version" value={terminal.product.hardwareVersion} />
-                    <InfoRow label="Firmware Version" value={terminal.product.firmwareVersion} />
+                    <InfoRow label="Firmware Version" value={fmtText(terminal.product.firmwareVersion)} />
                     <InfoRow label="Antenna Type" value={terminal.product.antennaType} />
                     <InfoRow label="Modem Type" value={terminal.product.modemType} />
                     <InfoRow label="Installed Accessories" value={terminal.product.installedAccessories.join(", ")} />
@@ -177,6 +185,8 @@ export function TerminalDetailClient({
                       <div>
                         <InfoRow label="Service Plan" value={terminal.activation.servicePlan} />
                         <InfoRow label="Assigned Customer" value={terminal.activation.assignedCustomerName} />
+                        <InfoRow label="Customer Account" value={terminal.activation.assignedAccountNumber} />
+                        <InfoRow label="Service Line" value={terminal.activation.serviceLineNumber} />
                         <InfoRow label="Activation Date" value={terminal.activation.activationDate ? formatDateTime(terminal.activation.activationDate) : null} />
                       </div>
                       <div>
@@ -199,15 +209,18 @@ export function TerminalDetailClient({
                   <CardContent className="pt-5">
                     <p className="mb-3 text-xs font-bold uppercase tracking-wider text-accent-green">Live Terminal Data</p>
                     <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-                      <span>Refreshes every {terminal.dataRefreshRateSeconds}s · last seen {formatDateTime(terminal.live.lastSeenAt)}</span>
+                      <span>
+                        Refreshes every {terminal.dataRefreshRateSeconds}s · last telemetry{" "}
+                        {terminal.live.lastSeenAt ? formatDateTime(terminal.live.lastSeenAt) : "never"}
+                      </span>
                       <FreshnessIndicator lastSeenAt={terminal.live.lastSeenAt} />
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <MetricTile label="Online Status" value={terminal.live.onlineStatus} />
+                      <MetricTile label="Online Status" value={terminal.live.onlineStatus} sub={terminal.live.statusReason} />
                       <MetricTile label="Connection State" value={terminal.live.connectionState} />
-                      <MetricTile label="Signal Strength" value={`${terminal.live.signalStrengthDbm} dBm`} />
-                      <MetricTile label="Signal Quality" value={`${terminal.live.signalQualityPct}%`} />
-                      <MetricTile label="Data Session" value={terminal.live.dataSessionStatus} />
+                      <MetricTile label="Signal Quality" value={fmtPct(terminal.live.signalQualityPct)} />
+                      <MetricTile label="Signal Strength" value={fmtDbm(terminal.live.signalStrengthDbm)} />
+                      <MetricTile label="Firmware" value={fmtText(terminal.product.firmwareVersion)} />
                     </div>
                   </CardContent>
                 </Card>
@@ -215,19 +228,20 @@ export function TerminalDetailClient({
                 <Card>
                   <CardContent className="pt-5">
                     <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent-green">Network Performance</p>
-                    {terminal.sourceVesselId && (
-                      <p className="mb-3 text-xs text-text-muted">
-                        Not returned by the SLASH API for this device yet — shown as 0 rather than estimated.
-                      </p>
-                    )}
+                    <p className="mb-3 text-xs text-text-muted">
+                      {terminal.network.measuredAt
+                        ? `Latest SLASH telemetry sample: ${formatDateTime(terminal.network.measuredAt)}. Metrics the API doesn't report show "Not available".`
+                        : "No telemetry sample available for this terminal."}
+                    </p>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <MetricTile label="Latency" value={`${terminal.network.latencyMs} ms`} />
-                      <MetricTile label="Packet Loss" value={`${terminal.network.packetLossPct}%`} />
-                      <MetricTile label="Uptime (30d)" value={`${terminal.network.uptimePct}%`} />
-                      <MetricTile label="Downtime (30d)" value={`${terminal.network.downtimeMinutesLast30d} min`} />
-                      <MetricTile label="Bandwidth" value={`${terminal.network.bandwidthMbps} Mbps`} />
-                      <MetricTile label="Throughput" value={`${terminal.network.throughputMbps} Mbps`} />
-                      <MetricTile label="Link Quality" value={terminal.network.linkQuality} />
+                      <MetricTile label="Downlink" value={fmtMbps(terminal.network.downlinkThroughputMbps)} />
+                      <MetricTile label="Uplink" value={fmtMbps(terminal.network.uplinkThroughputMbps)} />
+                      <MetricTile label="Latency (avg ping)" value={fmtMs(terminal.network.latencyMs)} />
+                      <MetricTile label="Ping Drop Rate" value={fmtPct(terminal.network.packetLossPct, 2)} />
+                      <MetricTile label="Obstruction" value={fmtPct(terminal.network.obstructionPct, 1)} />
+                      <MetricTile label="Uptime (since boot)" value={fmtUptime(terminal.network.uptimeSeconds)} />
+                      <MetricTile label="Uptime (30d)" value={fmtPct(terminal.network.uptimePct, 1)} />
+                      <MetricTile label="Link Quality" value={terminal.network.linkQuality ?? NOT_AVAILABLE} />
                     </div>
                   </CardContent>
                 </Card>
@@ -258,7 +272,7 @@ export function TerminalDetailClient({
                         />
                       </>
                     ) : (
-                      <p className="text-sm text-text-muted">No location fix — terminal not yet activated.</p>
+                      <p className="text-sm text-text-muted">No GPS location reported for this terminal.</p>
                     )}
                   </CardContent>
                 </Card>
@@ -342,11 +356,20 @@ export function TerminalDetailClient({
             content: (
               <Card>
                 <CardContent className="pt-5">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-accent-green">Terminal Health</p>
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent-green">Terminal Health</p>
+                  {terminal.dataSource === "SLASH" && (
+                    <p className="mb-3 text-xs text-text-muted">
+                      Hardware health (power, temperature, voltage, alignment, modem) is not exposed by the SLASH API for
+                      Starlink terminals.
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MetricTile label="Power Status" value={terminal.health.powerStatus} />
-                    <MetricTile label="Temperature" value={`${terminal.health.temperatureCelsius}°C`} />
-                    <MetricTile label="Voltage" value={`${terminal.health.voltage} V`} />
+                    <MetricTile
+                      label="Temperature"
+                      value={terminal.health.temperatureCelsius === null ? NOT_AVAILABLE : `${terminal.health.temperatureCelsius}°C`}
+                    />
+                    <MetricTile label="Voltage" value={terminal.health.voltage === null ? NOT_AVAILABLE : `${terminal.health.voltage} V`} />
                     <MetricTile label="Antenna Alignment" value={terminal.health.antennaAlignment} />
                     <MetricTile label="Modem Status" value={terminal.health.modemStatus} />
                     <MetricTile label="SIM Status" value={terminal.health.simStatus.replace(/_/g, " ")} />
@@ -462,57 +485,37 @@ export function TerminalDetailClient({
                   content: (
                     <div className="max-w-sm space-y-3">
                       <p className="mb-1 text-xs text-text-muted">
-                        Authorised actions sent to the terminal. Logged to the activity trail.
+                        {isLive
+                          ? "Only commands with a real SLASH WRITE action are available. Every WRITE is audited and Station Satcom is emailed automatically."
+                          : "Demo terminal — commands are simulated locally."}
                       </p>
                       <ActionButton
                         icon={RefreshCw}
                         label="Reboot Terminal"
-                        sublabel={isLive ? "Live — sent to the real device" : "Simulated (no live device linked)"}
+                        sublabel={isLive ? "Live — SLASH reboot_user_terminal" : "Simulated (demo terminal)"}
                         pending={pendingCommand === "REBOOT"}
                         onClick={() => runCommand("REBOOT")}
                       />
-                      <ActionButton
-                        icon={RefreshCw}
-                        label="Refresh Service"
-                        sublabel="Simulated — not supported by current API"
-                        pending={pendingCommand === "REFRESH_SERVICE"}
-                        onClick={() => runCommand("REFRESH_SERVICE")}
-                      />
-                      {terminal.status !== "SUSPENDED" ? (
+                      {(
+                        [
+                          { command: "REFRESH_SERVICE", icon: RefreshCw, label: "Refresh Service" },
+                          terminal.status !== "SUSPENDED"
+                            ? { command: "SUSPEND", icon: Ban, label: "Suspend Service" }
+                            : { command: "REACTIVATE", icon: CheckCircle2, label: "Reactivate Service" },
+                          { command: "UPDATE_FIRMWARE", icon: UploadCloud, label: "Update Firmware" },
+                          { command: "REQUEST_DIAGNOSTICS", icon: Stethoscope, label: "Request Diagnostics" },
+                        ] as { command: RemoteCommandType; icon: typeof RefreshCw; label: string }[]
+                      ).map((c) => (
                         <ActionButton
-                          icon={Ban}
-                          label="Suspend Service"
-                          sublabel={
-                            isLive
-                              ? "Simulated — real deactivation needs an account number this app doesn't capture yet"
-                              : "Simulated — not supported by current API"
-                          }
-                          pending={pendingCommand === "SUSPEND"}
-                          onClick={() => runCommand("SUSPEND")}
+                          key={c.command}
+                          icon={c.icon}
+                          label={c.label}
+                          sublabel={isLive ? "Not supported by the SLASH API" : "Simulated (demo terminal)"}
+                          pending={pendingCommand === c.command}
+                          disabled={isLive}
+                          onClick={() => runCommand(c.command)}
                         />
-                      ) : (
-                        <ActionButton
-                          icon={CheckCircle2}
-                          label="Reactivate Service"
-                          sublabel="Simulated — not supported by current API"
-                          pending={pendingCommand === "REACTIVATE"}
-                          onClick={() => runCommand("REACTIVATE")}
-                        />
-                      )}
-                      <ActionButton
-                        icon={UploadCloud}
-                        label="Update Firmware"
-                        sublabel="Simulated — not supported by current API"
-                        pending={pendingCommand === "UPDATE_FIRMWARE"}
-                        onClick={() => runCommand("UPDATE_FIRMWARE")}
-                      />
-                      <ActionButton
-                        icon={Stethoscope}
-                        label="Request Diagnostics"
-                        sublabel="Simulated — not supported by current API"
-                        pending={pendingCommand === "REQUEST_DIAGNOSTICS"}
-                        onClick={() => runCommand("REQUEST_DIAGNOSTICS")}
-                      />
+                      ))}
                     </div>
                   ),
                 },
@@ -530,17 +533,19 @@ function ActionButton({
   sublabel,
   onClick,
   pending,
+  disabled,
 }: {
   icon: typeof Power;
   label: string;
   sublabel?: string;
   onClick: () => void;
   pending?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      disabled={pending}
+      disabled={pending || disabled}
       className="flex w-full items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-text-secondary transition-colors hover:bg-surface-raised disabled:opacity-50"
     >
       <Icon className="size-4 shrink-0" />

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/db/connect";
 import { Invoice } from "@/models/Invoice";
-import { User } from "@/models/User";
+import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
 import { Subscription } from "@/models/Subscription";
 import { UsageRecord } from "@/models/UsageRecord";
 import { getCurrentUser } from "@/lib/auth/dal";
@@ -75,7 +75,7 @@ export default async function BillingPage({
   const [invoices, stats, customers] = await Promise.all([
     Invoice.find(filter).sort(sortSpec).limit(200).populate("customer").lean(),
     getBillingStats(),
-    User.find({ role: "CUSTOMER" }).sort({ name: 1 }).lean(),
+    User.find(CUSTOMER_PROFILE_FILTER).sort({ name: 1 }).lean(),
   ]);
 
   const activeSubs = await Subscription.find({
@@ -83,17 +83,20 @@ export default async function BillingPage({
     status: "ACTIVE",
   })
     .populate("plan")
+    .populate("customerAccount", "accountNumber")
     .lean();
 
-  const planByCustomer = new Map(
-    activeSubs.map((s) => [s.customer.toString(), s.plan as unknown as Record<string, unknown>])
+  const planByAccount = new Map(
+    activeSubs
+      .filter((s) => s.customerAccount)
+      .map((s) => [(s.customerAccount as unknown as { _id: { toString(): string } })._id.toString(), s.plan as unknown as Record<string, unknown>])
   );
 
   const usageRecords = await UsageRecord.find({
     customer: { $in: customers.map((c) => c._id) },
   }).lean();
-  const usageByCustomerPeriod = new Map(
-    usageRecords.map((u) => [`${u.customer.toString()}|${u.periodMonth}`, u.volumeDataBytes ?? 0])
+  const usageByAccountPeriod = new Map(
+    usageRecords.map((u) => [`${u.customerAccount?.toString() ?? u.customer.toString()}|${u.periodMonth}`, u.volumeDataBytes ?? 0])
   );
 
   let rows: InvoiceListRow[] = invoices.map((inv) => {
@@ -105,17 +108,18 @@ export default async function BillingPage({
       cardName?: string;
     } | null;
     const cid = customer?._id?.toString() ?? "";
-    const plan = planByCustomer.get(cid) as { name?: string } | undefined;
+    const accountKey = inv.customerAccount?.toString() ?? cid;
+    const plan = planByAccount.get(accountKey) as { name?: string } | undefined;
     return {
       id: inv._id.toString(),
       invoiceNumber: inv.invoiceNumber,
       customerId: cid,
       customerName: customer?.name ?? "Unknown",
-      customerCode: customer?.customerCode ?? "",
+      customerCode: inv.accountNumber || customer?.customerCode || "",
       vendor: customer?.vendor ?? "--",
       cardName: customer?.cardName ?? "--",
       planName: plan?.name ?? "--",
-      usageGB: Math.round(((usageByCustomerPeriod.get(`${cid}|${inv.periodMonth}`) ?? 0) / GB) * 100) / 100,
+      usageGB: Math.round(((usageByAccountPeriod.get(`${accountKey}|${inv.periodMonth}`) ?? 0) / GB) * 100) / 100,
       periodMonth: inv.periodMonth,
       issueDate: (inv.issueDate as Date).toISOString(),
       dueDate: (inv.dueDate as Date).toISOString(),
@@ -137,10 +141,14 @@ export default async function BillingPage({
     );
   }
 
-  const customerOptions: BillableCustomerOption[] = customers
-    .filter((c) => planByCustomer.has(c._id.toString()))
-    .map((c) => {
-      const plan = planByCustomer.get(c._id.toString()) as {
+  // One option per Customer Account with an active subscription.
+  const customerById = new Map(customers.map((c) => [c._id.toString(), c]));
+  const customerOptions: BillableCustomerOption[] = activeSubs
+    .filter((s) => s.customerAccount && s.plan && customerById.has(s.customer.toString()))
+    .map((s) => {
+      const c = customerById.get(s.customer.toString())!;
+      const account = s.customerAccount as unknown as { _id: { toString(): string }; accountNumber: string };
+      const plan = s.plan as unknown as {
         _id: string;
         name: string;
         provider: string;
@@ -152,8 +160,9 @@ export default async function BillingPage({
       };
       return {
         id: c._id.toString(),
-        label: `${c.name}${c.customerCode ? ` (${c.customerCode})` : ""}`,
-        customerCode: c.customerCode ?? "",
+        accountId: account._id.toString(),
+        label: `${c.name} (${account.accountNumber})`,
+        customerCode: account.accountNumber,
         customerSince: (c.createdAt as Date).toISOString(),
         planId: plan._id.toString(),
         planName: plan.name,

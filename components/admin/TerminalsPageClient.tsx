@@ -8,8 +8,6 @@ import {
   Satellite,
   Wifi,
   WifiOff,
-  AlertTriangle,
-  Ban,
   Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
@@ -199,10 +197,10 @@ export function TerminalsPageClient({
             <THead>
               <TR>
                 <TH>Terminal</TH>
-                <TH>Customer</TH>
-                <TH>Model</TH>
+                <TH>Customer / Account</TH>
+                <TH>Firmware</TH>
                 <TH>Status</TH>
-                <TH>Signal</TH>
+                <TH>Connectivity</TH>
                 <TH>Last Seen</TH>
                 <TH>Faults</TH>
                 <TH />
@@ -218,45 +216,55 @@ export function TerminalsPageClient({
                     <TD>
                       <div className="flex items-center gap-1.5">
                         <p className="font-medium text-text-primary">
-                          {t.identification.serialNumber}
+                          {t.activation.displayName || t.identification.serialNumber}
                         </p>
-                        {t.sourceVesselId && (
-                          <Badge tone="blue" className="px-1.5 py-0.5 text-[10px]">
-                            Live
-                          </Badge>
-                        )}
+                        <Badge tone={t.dataSource === "SLASH" ? "blue" : "amber"} className="px-1.5 py-0.5 text-[10px]">
+                          {t.dataSource === "SLASH" ? "Live" : "Demo"}
+                        </Badge>
                       </div>
                       <p className="font-mono text-xs text-accent-green">
-                        {t.identification.iccid}
+                        {t.identification.serialNumber}
+                        {t.identification.iccid ? ` · ${t.identification.iccid}` : ""}
                       </p>
                     </TD>
                     <TD>
-                      {t.activation.assignedCustomerName ?? (
-                        <span className="text-text-muted">Unassigned</span>
+                      {t.activation.assignedCustomerName ? (
+                        <>
+                          <p>{t.activation.assignedCustomerName}</p>
+                          {t.activation.assignedAccountNumber && (
+                            <p className="font-mono text-xs text-text-muted">{t.activation.assignedAccountNumber}</p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-amber">Not linked to an account</span>
                       )}
                     </TD>
-                    <TD>{t.product.model}</TD>
+                    <TD className="font-mono text-xs">{t.product.firmwareVersion || "--"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[t.status]}>
                         {t.status.replace(/_/g, " ")}
                       </Badge>
                     </TD>
                     <TD>
-                      <div className="flex items-center gap-1.5">
-                        {t.live.onlineStatus === "ONLINE" ? (
-                          <Wifi className="size-3.5 text-accent-green" />
-                        ) : (
-                          <WifiOff className="size-3.5 text-text-muted" />
-                        )}
-                        <span className="text-xs">
-                          {t.live.onlineStatus === "ONLINE"
-                            ? `${t.live.signalStrengthDbm} dBm`
-                            : "Offline"}
+                      <div className="flex flex-col gap-0.5" title={t.live.statusReason}>
+                        <span className="flex items-center gap-1.5 text-xs">
+                          {t.live.onlineStatus === "ONLINE" ? (
+                            <Wifi className="size-3.5 text-accent-green" />
+                          ) : (
+                            <WifiOff className="size-3.5 text-text-muted" />
+                          )}
+                          {t.live.onlineStatus === "ONLINE" ? "Online" : t.live.onlineStatus === "OFFLINE" ? "Offline" : "Unknown"}
                         </span>
+                        {t.live.onlineStatus === "ONLINE" && (
+                          <span className="text-[11px] text-text-muted">
+                            {t.live.signalQualityPct !== null ? `Signal ${t.live.signalQualityPct}%` : "Signal n/a"}
+                            {t.network.downlinkThroughputMbps !== null ? ` · ↓${t.network.downlinkThroughputMbps.toFixed(0)} Mbps` : ""}
+                          </span>
+                        )}
                       </div>
                     </TD>
                     <TD className="text-text-secondary">
-                      {formatDateTime(t.live.lastSeenAt)}
+                      {t.live.lastSeenAt ? formatDateTime(t.live.lastSeenAt) : "Never"}
                     </TD>
                     <TD>
                       {openFaults > 0 ? (
@@ -267,7 +275,7 @@ export function TerminalsPageClient({
                     </TD>
                     <TD>
                       <Link
-                        href={`/admin/terminals/${t.id}`}
+                        href={`/admin/terminals/${encodeURIComponent(t.id)}`}
                         className="text-xs font-medium text-accent-blue hover:underline"
                       >
                         View

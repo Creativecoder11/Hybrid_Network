@@ -1,4 +1,6 @@
 export * from "./User";
+export * from "./CustomerAccount";
+export * from "./Migration";
 export * from "./ServicePlan";
 export * from "./Subscription";
 export * from "./CdrBatch";

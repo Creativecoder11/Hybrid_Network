@@ -81,7 +81,7 @@ export function TrackingPageClient({ terminals, detailBasePath }: { terminals: T
                 id: t.id,
                 latitude: t.location!.latitude,
                 longitude: t.location!.longitude,
-                label: t.identification.serialNumber,
+                label: t.activation.displayName || t.identification.serialNumber,
                 online: t.live.onlineStatus === "ONLINE",
               }))}
               trail={history}

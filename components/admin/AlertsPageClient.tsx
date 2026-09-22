@@ -3,21 +3,13 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Search, ShieldOff } from "lucide-react";
 import { Input } from "@/components/ui/Input";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { Tabs } from "@/components/ui/Tabs";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/utils/format";
 import type { EnrichedAlert } from "@/lib/terminals/alerts";
-
-const SEVERITY_TONE: Record<string, BadgeTone> = {
-  CRITICAL: "red",
-  MAJOR: "red",
-  MINOR: "amber",
-  WARNING: "amber",
-  INFO: "blue",
-};
 
 function AlertTable({ rows }: { rows: EnrichedAlert[] }) {
   if (rows.length === 0) {
@@ -35,31 +27,26 @@ function AlertTable({ rows }: { rows: EnrichedAlert[] }) {
         <THead>
           <TR>
             <TH>Device</TH>
-            <TH>Customer</TH>
-            <TH>Type</TH>
-            <TH>Message</TH>
-            <TH>Severity</TH>
+            <TH>Customer / Account</TH>
+            <TH>Alert</TH>
+            <TH>Description</TH>
             <TH>First Seen</TH>
             <TH>Last Seen</TH>
             <TH>Status</TH>
           </TR>
         </THead>
         <TBody>
-          {rows.map((a, i) => (
-            <TR key={a.id ?? `${a.userTerminalId}-${i}`}>
+          {rows.map((a) => (
+            <TR key={a.id}>
               <TD className="font-medium text-text-primary">{a.terminalLabel ?? "Unknown device"}</TD>
-              <TD>{a.customerName ?? <span className="text-text-muted">—</span>}</TD>
-              <TD>{a.type ?? <span className="text-text-muted">—</span>}</TD>
-              <TD className="max-w-xs truncate">{a.message ?? <span className="text-text-muted">—</span>}</TD>
               <TD>
-                {a.severity ? (
-                  <Badge tone={SEVERITY_TONE[a.severity.toUpperCase()] ?? "neutral"}>{a.severity}</Badge>
-                ) : (
-                  <span className="text-text-muted">Not reported</span>
-                )}
+                {a.customerName ?? <span className="text-text-muted">Unassigned</span>}
+                {a.accountNumber && <span className="block font-mono text-xs text-text-muted">{a.accountNumber}</span>}
               </TD>
-              <TD>{a.startedAt ? formatDateTime(a.startedAt) : "—"}</TD>
-              <TD>{a.endedAt ? formatDateTime(a.endedAt) : "Ongoing"}</TD>
+              <TD>{a.alertName}</TD>
+              <TD className="max-w-xs truncate">{a.description || <span className="text-text-muted">—</span>}</TD>
+              <TD>{a.firstSeen ? formatDateTime(a.firstSeen) : "—"}</TD>
+              <TD>{a.lastSeen ? formatDateTime(a.lastSeen) : "—"}</TD>
               <TD>
                 <Badge tone={a.active ? "red" : "neutral"}>{a.active ? "Active" : "Resolved"}</Badge>
               </TD>
@@ -84,8 +71,9 @@ export function AlertsPageClient({ alerts }: { alerts: EnrichedAlert[] }) {
       (a) =>
         (a.terminalLabel ?? "").toLowerCase().includes(needle) ||
         (a.customerName ?? "").toLowerCase().includes(needle) ||
-        (a.type ?? "").toLowerCase().includes(needle) ||
-        (a.message ?? "").toLowerCase().includes(needle)
+        (a.accountNumber ?? "").toLowerCase().includes(needle) ||
+        a.alertName.toLowerCase().includes(needle) ||
+        a.description.toLowerCase().includes(needle)
     );
   }, [alerts, q]);
 
@@ -123,8 +111,8 @@ export function AlertsPageClient({ alerts }: { alerts: EnrichedAlert[] }) {
             content: (
               <EmptyState
                 icon={ShieldOff}
-                title="Not supported by current API"
-                description="GET /alerts/routers is not confirmed against the SLASH API this app is integrated with — no router alert endpoint has been observed. This tab is wired to appear the moment that endpoint is confirmed."
+                title="Not available from the SLASH API yet"
+                description="GET /alerts/routers exists, but the SLASH documentation states router alerts are currently unpopulated upstream. Router alerts will be added once SLASH starts returning them."
               />
             ),
           },

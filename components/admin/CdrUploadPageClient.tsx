@@ -41,9 +41,10 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
         return;
       }
 
-      toast.success(
-        `Processed ${json.data.totalRows} rows — ${json.data.matchedRows} matched, ${json.data.unmatchedRows} unmatched.`
-      );
+      const d = json.data as { totalRows: number; matchedRows: number; unmatchedRows: number; duplicateRows: number };
+      const summary = `Upload completed — ${d.totalRows} records: ${d.matchedRows} allocated, ${d.unmatchedRows} unallocated${d.duplicateRows ? `, ${d.duplicateRows} duplicates skipped` : ""}.`;
+      if (d.unmatchedRows > 0) toast.warning(summary);
+      else toast.success(summary);
       router.push(`/admin/cdr-upload/${json.data.batchId}`);
     } catch {
       toast.error("Something went wrong uploading the file.");
@@ -59,8 +60,10 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
       <div>
         <p className="text-2xl font-bold text-text-primary">CDR Upload</p>
         <p className="text-sm ">
-          Upload a Rated CDR export (.xlsx or .csv) to match usage to customers and update their
-          billing period totals.
+          Upload a Rated CDR export (.xlsx or .csv) — single-customer or bulk. Each record is allocated by Customer Code →
+          Customer Account and Product Code (&ldquo;Prod&rdquo;) → Product, and allocated usage updates that account&apos;s
+          monthly totals. Unknown codes are reported as unallocated; nothing is created automatically. Records already
+          uploaded are skipped as duplicates.
         </p>
       </div>
 
@@ -137,9 +140,10 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
                   <TH>Uploaded By</TH>
                   <TH>Period</TH>
                   <TH>Mode</TH>
-                  <TH>Rows</TH>
-                  <TH>Matched</TH>
-                  <TH>Unmatched</TH>
+                  <TH>Records</TH>
+                  <TH>Allocated</TH>
+                  <TH>Unallocated</TH>
+                  <TH>Duplicates</TH>
                   <TH>Status</TH>
                   <TH>Date</TH>
                   <TH />
@@ -148,7 +152,10 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
               <TBody>
                 {batches.map((b) => (
                   <TR key={b.id}>
-                    <TD className="font-medium text-text-primary">{b.fileName}</TD>
+                    <TD className="font-medium text-text-primary">
+                      {b.fileName}
+                      <span className="block font-mono text-[10px] text-text-muted">{b.id}</span>
+                    </TD>
                     <TD className="text-text-secondary">{b.uploadedByName}</TD>
                     <TD>{b.periodMonth ? formatPeriodMonth(b.periodMonth) : "--"}</TD>
                     <TD>
@@ -159,10 +166,16 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
                     <TD className={b.unmatchedRows > 0 ? "text-amber" : "text-text-secondary"}>
                       {formatNumber(b.unmatchedRows)}
                     </TD>
+                    <TD className="text-text-secondary">{formatNumber(b.duplicateRows)}</TD>
                     <TD>
                       <Badge tone={b.status === "COMPLETED" ? "green" : b.status === "FAILED" ? "red" : "amber"}>
                         {b.status}
                       </Badge>
+                      {b.status === "FAILED" && b.errorLog.length > 0 && (
+                        <span className="mt-1 block max-w-[220px] truncate text-[11px] text-red" title={b.errorLog.join("\n")}>
+                          {b.errorLog[b.errorLog.length - 1]}
+                        </span>
+                      )}
                     </TD>
                     <TD className="text-text-secondary">{formatDateTime(b.createdAt)}</TD>
                     <TD>

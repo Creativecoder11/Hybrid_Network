@@ -15,13 +15,18 @@ export type RetailPlanRow = {
   updatedAt: string;
 };
 
+/** A Product Code (CdrIdentifierMapping) with its optional pricing rule. */
 export type CdrIdentifierMappingRow = {
   id: string;
   identifier: string;
+  name: string;
+  productType: "CALL" | "SMS" | "DATA" | "SERVICE" | "OTHER";
+  category: string;
+  description: string;
   retailPlanId: string;
   retailPlanName: string;
   retailPlanActive: boolean;
-  pricingMethod: PricingMethod;
+  pricingMethod: PricingMethod | null;
   pricingValueLabel: string;
   isActive: boolean;
   createdAt: string;
@@ -34,11 +39,17 @@ export type CdrImportBatchRow = {
   uploadedByName: string;
   identifierColumn: string;
   wholesaleColumn: string;
+  customerCodeColumn: string;
+  recordTypeColumn: string;
   totalRows: number;
   processedRows: number;
   matchedRows: number;
   unmatchedRows: number;
   invalidRows: number;
+  duplicateRows: number;
+  distinctCustomerCodes: number;
+  alertAcknowledged: boolean;
+  processingMs: number;
   totalWholesaleAmount: number;
   totalRetailAmount: number;
   currency: string;
@@ -52,9 +63,11 @@ export type CdrChargeRecordRow = {
   rowNumber: number;
   identifier: string;
   description: string;
+  recordType: string;
   customerId: string;
   customerName: string;
   customerCode: string;
+  accountNumber: string;
   wholesaleAmount: number;
   currency: string;
   retailPlanName: string;
@@ -62,7 +75,8 @@ export type CdrChargeRecordRow = {
   markupPercentUsed: number | null;
   fixedPriceUsed: number | null;
   retailAmount: number;
-  status: "MATCHED" | "UNMATCHED" | "INVALID";
+  status: "MATCHED" | "UNMATCHED" | "INVALID" | "DUPLICATE";
+  unallocatedReason: string;
   errorReason: string;
   invoiceId: string | null;
   createdAt: string;

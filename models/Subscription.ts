@@ -6,6 +6,7 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 const SubscriptionSchema = new Schema(
   {
     customer: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    customerAccount: { type: Schema.Types.ObjectId, ref: "CustomerAccount", default: null, index: true },
     plan: { type: Schema.Types.ObjectId, ref: "ServicePlan", required: true },
     startDate: { type: Date, required: true, default: Date.now },
     endDate: { type: Date, default: null },

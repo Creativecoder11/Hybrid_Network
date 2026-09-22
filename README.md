@@ -40,8 +40,12 @@ A billing, usage-tracking, and customer-management platform for an ISP distribut
    | `NEXT_PUBLIC_APP_URL` | Public base URL of the app, e.g. `http://localhost:3000` — used in invite/reset/invoice links |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | SMTP credentials for sending real email. **Leave blank in development** — emails are logged to the console instead of sent, including the invite/reset/invoice links, so you can click through flows without a mail server. |
    | `EMAIL_FROM` | From-address used on outgoing email |
-   | `API_URL` | **Despite the name, this is the SLASH API key** (`sk_...`), not a URL — sent as `X-API-Key` to the Starlink/SLASH API. See `lib/starlink/`. Leave blank to run with only mock terminal data. |
-   | `STARLINK_API_BASE_URL` | Optional override of the SLASH API base URL (defaults to `https://slash-api.rudra.sh/api/v1`) |
+   | `SLASH_API_KEY` (legacy name: `API_URL`) | The SLASH API key (`sk_...`), sent server-side only as `X-API-Key`. See `lib/starlink/`. |
+   | `SLASH_API_BASE_URL` (legacy: `STARLINK_API_BASE_URL`) | Optional override of the SLASH API base URL (defaults to `https://slash-api.rudra.sh/api/v1`) |
+   | `TERMINAL_ONLINE_THRESHOLD_MINUTES` | Telemetry age (minutes) under which a terminal counts as online. Default 15. |
+   | `SLASH_WRITE_NOTIFY_EMAIL` | Recipient of the automatic notice for every SLASH WRITE. Default `service@stationsatcom.com`. |
+   | `ENABLE_DEMO_TERMINALS` | `true` only for local demos — fabricated terminals, never shown to customers. |
+   | `SKIP_BOOT_MIGRATIONS` | `true` to stop the server applying pending migrations at startup. |
 
    If you don't have MongoDB running locally, the quickest option is a local install via Homebrew (`brew install mongodb-community`) or Docker (`docker run -d -p 27017:27017 mongo:8`). A managed MongoDB Atlas free tier also works — just put its connection string in `MONGODB_URI`.
 
@@ -80,7 +84,39 @@ npm run build       # production build
 npm run start        # run the production build
 npm run lint          # ESLint
 npm run typecheck  # tsc --noEmit
+npm run migrate    # apply pending data migrations (also runs automatically at server start)
+npm test           # unit tests (allocation, CDR parsing, device status, validation) + invoice PDF rendering
 ```
+
+`npm test` never connects to a database (it uses a dummy `MONGODB_URI`).
+
+## Customers, accounts and portal users
+
+- **Customer Profile** — a `User` with role `CUSTOMER` and no `customerProfile`
+  link. Holds company details and is the primary portal login.
+- **Customer Account** (`models/CustomerAccount.ts`) — a profile owns one or
+  more. The account number **is** the Customer Code on CDR files. Devices
+  (Starlink vessel IDs), plans, usage, bills and CDR records are per account.
+- **Portal users** — additional logins for the same company
+  (`customerProfile` set), each with access to all or selected accounts.
+  Invitations email a temporary password (valid 7 days); the first sign-in
+  forces a password change.
+- The customer portal shows one account at a time (account selector in the
+  header when the user has several). Every customer page, action and export is
+  scoped server-side through `lib/accounts/access.ts`.
+
+## CDR allocation
+
+Both CDR pipelines (Admin → CDR Upload for rated usage files, Admin → Billing →
+CDR Import for retail pricing CSVs) allocate each record by **Customer Code →
+Customer Account** and **Product Code → Product** (Admin → Billing → Product
+Codes). Records that don't resolve — unknown account, unknown/inactive
+product, record type that contradicts the product type, product not enabled
+for the account, or (retail) no pricing rule — are stored as **Unallocated**,
+listed in a downloadable Unallocated Report, raise an admin alert (bell +
+email to Super Admins), and can be reprocessed or allocated manually. Nothing
+is created automatically. Records already processed (same record id, or the
+same content when the file has no id) are skipped as duplicates.
 
 ## Project structure
 

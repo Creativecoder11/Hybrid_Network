@@ -6,6 +6,9 @@ export type UsageSource = (typeof USAGE_SOURCES)[number];
 const UsageRecordSchema = new Schema(
   {
     customer: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    // Usage is kept per Customer Account. null only on rows created before
+    // accounts existed and not yet migrated (see lib/migrations/).
+    customerAccount: { type: Schema.Types.ObjectId, ref: "CustomerAccount", default: null },
     subscription: { type: Schema.Types.ObjectId, ref: "Subscription", default: null },
     periodMonth: { type: String, required: true }, // "YYYYMM"
 
@@ -33,7 +36,15 @@ const UsageRecordSchema = new Schema(
   { timestamps: true }
 );
 
-UsageRecordSchema.index({ customer: 1, periodMonth: 1 }, { unique: true });
+// One row per account per month. Replaces the original
+// { customer, periodMonth } unique index, which the 002 migration drops —
+// otherwise two accounts of the same profile could not both have usage for
+// the same month.
+UsageRecordSchema.index(
+  { customer: 1, customerAccount: 1, periodMonth: 1 },
+  { unique: true, name: "customer_account_period_unique" }
+);
+UsageRecordSchema.index({ customerAccount: 1, periodMonth: 1 });
 
 export type UsageRecordDoc = InferSchemaType<typeof UsageRecordSchema>;
 

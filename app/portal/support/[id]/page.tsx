@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isValidObjectId } from "mongoose";
 import { ArrowLeft } from "lucide-react";
 import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
@@ -16,9 +17,10 @@ export default async function PortalTicketDetailPage({ params }: { params: Promi
   const user = await requireRole(["CUSTOMER"], "/admin");
   const { id } = await params;
 
+  if (!isValidObjectId(id)) notFound();
   await connectDB();
   const ticket = await SupportTicket.findById(id).populate("replies.author").lean();
-  if (!ticket || ticket.customer.toString() !== user.id) notFound();
+  if (!ticket || ticket.customer.toString() !== user.customerProfileId) notFound();
 
   const detail: TicketDetail = {
     id: ticket._id.toString(),

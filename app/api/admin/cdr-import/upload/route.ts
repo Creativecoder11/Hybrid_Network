@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
   const mode = String(formData.get("mode") ?? "preview") === "commit" ? "commit" : "preview";
   const identifierColumn = String(formData.get("identifierColumn") ?? "").trim() || undefined;
   const wholesaleColumn = String(formData.get("wholesaleColumn") ?? "").trim() || undefined;
+  const customerCodeColumn = String(formData.get("customerCodeColumn") ?? "").trim() || undefined;
+  const recordTypeColumn = String(formData.get("recordTypeColumn") ?? "").trim() || undefined;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ success: false, error: "No file was uploaded." }, { status: 400 });
@@ -28,9 +30,16 @@ export async function POST(request: NextRequest) {
   if (!file.name.toLowerCase().endsWith(".csv")) {
     return NextResponse.json({ success: false, error: "Please upload a .csv file." }, { status: 400 });
   }
+  if (file.size === 0) {
+    return NextResponse.json({ success: false, error: "The uploaded file is empty." }, { status: 400 });
+  }
 
   const csvText = await file.text();
-  const columnOverride = { identifierColumn, wholesaleColumn };
+  // A CSV must be text; reject binary content renamed to .csv.
+  if (csvText.includes("\u0000")) {
+    return NextResponse.json({ success: false, error: "This doesn't look like a CSV text file." }, { status: 400 });
+  }
+  const columnOverride = { identifierColumn, wholesaleColumn, customerCodeColumn, recordTypeColumn };
 
   try {
     if (mode === "preview") {

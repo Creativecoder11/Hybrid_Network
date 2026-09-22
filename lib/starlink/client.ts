@@ -42,20 +42,32 @@ export class StarlinkApiError extends Error {
 // The real body (parsed JSON, or null) is still attached to the error for
 // server-side logging — only this mapped message is safe to show a user.
 const STATUS_MESSAGES: Record<number, string> = {
+  0: "The terminal provider could not be reached. Please try again.",
   400: "The request to the terminal provider was invalid.",
   401: "Terminal provider authentication failed.",
   403: "Not permitted to access this terminal provider resource.",
-  404: "That resource was not found in the terminal provider.",
+  404: "That device or service was not found at the terminal provider.",
+  408: "The terminal provider took too long to respond. Please try again.",
   409: "That request conflicts with the terminal provider's current state.",
   429: "The terminal provider is rate-limiting requests. Please try again shortly.",
   500: "The terminal provider is temporarily unavailable.",
+  502: "The terminal provider is temporarily unavailable.",
+  503: "The terminal provider is temporarily unavailable.",
+  504: "The terminal provider took too long to respond. Please try again.",
 };
 
+/** Safe, user-facing message. Never includes upstream response text. */
 export function friendlyStarlinkErrorMessage(err: unknown): string {
   if (err instanceof StarlinkApiError) {
     return STATUS_MESSAGES[err.status] ?? "Unable to reach the terminal provider. Please try again.";
   }
   return "Unable to load terminal data. Please try again.";
+}
+
+/** Technical one-liner for server logs (status + upstream message; no credentials). */
+export function describeStarlinkError(err: unknown): string {
+  if (err instanceof StarlinkApiError) return `SLASH ${err.status || "network"}: ${err.message}`;
+  return err instanceof Error ? err.message : String(err);
 }
 
 type FetchInit = {
@@ -101,6 +113,9 @@ async function rawFetch(url: string, init: FetchInit): Promise<Response> {
         : { cache: "no-store" as const }),
     });
   } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new StarlinkApiError(408, null, "SLASH API request timed out after 20s");
+    }
     throw new StarlinkApiError(0, null, `Failed to reach SLASH API: ${(err as Error).message}`);
   } finally {
     clearTimeout(timeout);

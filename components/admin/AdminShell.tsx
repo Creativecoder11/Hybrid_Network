@@ -11,7 +11,6 @@ import {
   LifeBuoy,
   UserCog,
   Settings as SettingsIcon,
-  Bell,
   AlertTriangle,
   MapPin,
   Gauge,
@@ -22,6 +21,8 @@ import { AppShell, type NavItem } from "@/components/ui/AppShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { logoutAction } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/dal";
+import type { OpenCdrAlert } from "@/lib/cdr/alerts";
+import { AdminAlertBell } from "@/components/admin/AdminAlertBell";
 
 function baseNav(unreadSupportCount: number): NavItem[] {
   return [
@@ -48,10 +49,14 @@ function baseNav(unreadSupportCount: number): NavItem[] {
 export function AdminShell({
   user,
   unreadSupportCount = 0,
+  cdrAlerts = [],
+  cdrAlertCount = 0,
   children,
 }: {
   user: CurrentUser;
   unreadSupportCount?: number;
+  cdrAlerts?: OpenCdrAlert[];
+  cdrAlertCount?: number;
   children: ReactNode;
 }) {
   const [, startTransition] = useTransition();
@@ -79,12 +84,7 @@ export function AdminShell({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              className="relative flex size-9 items-center justify-center rounded-full border border-line text-text-secondary hover:bg-surface-raised"
-              aria-label="Notifications"
-            >
-              <Bell className="size-4" />
-            </button>
+            <AdminAlertBell alerts={cdrAlerts} total={cdrAlertCount} />
             <div className="flex items-center gap-2.5">
               <Avatar name={user.name} src={user.avatarUrl} size="sm" />
               <div className="hidden text-left sm:block">

@@ -10,9 +10,6 @@ import {
   Eye,
   Trash2,
   Users,
-  UserCheck,
-  AlertTriangle,
-  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -184,7 +181,7 @@ export function CustomersPageClient({
         <div className="flex-1">
           <Input
             icon={<Search className="size-4" />}
-            placeholder="Search by name, email, ID, or customer code..."
+            placeholder="Search by name, company, email, ID, or account number..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -231,8 +228,9 @@ export function CustomersPageClient({
           <Table>
             <THead>
               <TR>
-                <TH>Account ID</TH>
+                <TH>Customer ID</TH>
                 <TH>Customer</TH>
+                <TH>Customer Accounts</TH>
                 <TH>Phone</TH>
                 <TH>Joined</TH>
                 <TH>Plan</TH>
@@ -247,10 +245,18 @@ export function CustomersPageClient({
                     {c.customerId || "--"}
                   </TD>
                   <TD>
-                    <p className="font-medium text-text-primary">{c.name}</p>
-                    {c.customerCode && (
-                      <p className="text-xs font-medium text-accent-green">
-                        {c.customerCode}
+                    <p className="font-medium text-text-primary">{c.company || c.name}</p>
+                    {c.company && <p className="text-xs text-text-muted">{c.name}</p>}
+                  </TD>
+                  <TD>
+                    {c.accountNumbers.length === 0 ? (
+                      <span className="text-xs text-amber">No account</span>
+                    ) : (
+                      <p className="font-mono text-xs font-medium text-accent-green">
+                        {c.accountNumbers.slice(0, 2).join(", ")}
+                        {c.accountNumbers.length > 2 && (
+                          <span className="text-text-muted"> +{c.accountNumbers.length - 2} more</span>
+                        )}
                       </p>
                     )}
                   </TD>

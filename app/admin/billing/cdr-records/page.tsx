@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db/connect";
 import { CdrChargeRecord } from "@/models/CdrChargeRecord";
 import { CdrImportBatch } from "@/models/CdrImportBatch";
-import { User } from "@/models/User";
+import { loadAccountOptions, toChargeRow } from "@/lib/admin/cdrOptions";
 import { BillingSubNav } from "@/components/admin/BillingSubNav";
 import { CdrRecordsPageClient } from "@/components/admin/CdrRecordsPageClient";
 import type { CdrChargeRecordRow } from "@/lib/types/retailBilling";
@@ -28,42 +29,29 @@ export default async function CdrRecordsPage({
   // same trade-off as the Billing page's invoice search.
   const filter: Record<string, unknown> = {};
   if (status !== "ALL") filter.status = status;
-  if (batchId) filter.importBatch = batchId;
+  if (batchId && mongoose.isValidObjectId(batchId)) filter.importBatch = batchId;
 
-  const [recordDocs, batches, customers] = await Promise.all([
-    CdrChargeRecord.find(filter).sort({ createdAt: -1 }).limit(300).populate("customer").lean(),
+  const [recordDocs, batches, accountOptions] = await Promise.all([
+    CdrChargeRecord.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(300)
+      .populate("customer", "name company")
+      .populate("customerAccount", "accountNumber")
+      .lean(),
     CdrImportBatch.find().sort({ createdAt: -1 }).limit(100).select("fileName").lean(),
-    User.find({ role: "CUSTOMER" }).select("name customerCode").sort({ name: 1 }).lean(),
+    loadAccountOptions(),
   ]);
 
-  let records: CdrChargeRecordRow[] = recordDocs.map((r) => {
-    const customer = r.customer as unknown as { _id: unknown; name: string; customerCode?: string } | null;
-    return {
-      id: r._id.toString(),
-      rowNumber: r.rowNumber,
-      identifier: r.identifier,
-      description: r.description,
-      customerId: customer ? (customer._id as { toString(): string }).toString() : "",
-      customerName: customer?.name ?? "",
-      customerCode: r.customerCode ?? customer?.customerCode ?? "",
-      wholesaleAmount: r.wholesaleAmount,
-      currency: r.currency ?? "USD",
-      retailPlanName: r.retailPlanName ?? "",
-      pricingMethodUsed: r.pricingMethodUsed ?? null,
-      markupPercentUsed: r.markupPercentUsed ?? null,
-      fixedPriceUsed: r.fixedPriceUsed ?? null,
-      retailAmount: r.retailAmount,
-      status: r.status,
-      errorReason: r.errorReason ?? "",
-      invoiceId: r.invoice ? (r.invoice as { toString(): string }).toString() : null,
-      createdAt: (r.createdAt as Date).toISOString(),
-    };
-  });
+  let records: CdrChargeRecordRow[] = recordDocs.map((r) => toChargeRow(r as unknown as Parameters<typeof toChargeRow>[0]));
 
   if (q.trim()) {
     const needle = q.trim().toLowerCase();
     records = records.filter(
-      (r) => r.identifier.toLowerCase().includes(needle) || r.customerName.toLowerCase().includes(needle)
+      (r) =>
+        r.identifier.toLowerCase().includes(needle) ||
+        r.customerName.toLowerCase().includes(needle) ||
+        r.customerCode.toLowerCase().includes(needle) ||
+        r.accountNumber.toLowerCase().includes(needle)
     );
   }
 
@@ -76,10 +64,7 @@ export default async function CdrRecordsPage({
         q={q}
         batchId={batchId}
         batchOptions={batches.map((b) => ({ id: b._id.toString(), fileName: b.fileName }))}
-        customerOptions={customers.map((c) => ({
-          id: c._id.toString(),
-          label: `${c.name}${c.customerCode ? ` (${c.customerCode})` : ""}`,
-        }))}
+        accountOptions={accountOptions}
       />
     </div>
   );

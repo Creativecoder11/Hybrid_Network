@@ -1,20 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db/connect";
 import { CdrChargeRecord } from "@/models/CdrChargeRecord";
-import { User } from "@/models/User";
+import { CustomerAccount } from "@/models/CustomerAccount";
 import { ActivityLog } from "@/models/ActivityLog";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { reprocessUnmatchedRecords } from "@/lib/cdr/retailCdrProcess";
 import type { ActionState } from "@/lib/actions/customers";
 
-/** Re-runs pricing for a batch's UNMATCHED records against the current mapping table. */
+/** Re-runs allocation + pricing for a batch's unallocated records against the current accounts and Product Codes. */
 export async function reprocessBatchAction(batchId: string): Promise<ActionState> {
   const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
   if (!admin) return { error: "You're not authorized to perform this action." };
+  if (!mongoose.isValidObjectId(batchId)) return { error: "Upload not found." };
 
-  const { reMatched, stillUnmatched } = await reprocessUnmatchedRecords(batchId);
+  const { reMatched, stillUnmatched } = await reprocessUnmatchedRecords(batchId, admin.id);
 
   await ActivityLog.create({
     actor: admin.id,
@@ -26,38 +28,50 @@ export async function reprocessBatchAction(batchId: string): Promise<ActionState
   revalidatePath("/admin/billing/cdr-import");
 
   if (reMatched === 0) {
-    return { error: "No previously-unmatched records could be matched to a Retail Plan yet." };
+    return {
+      error: `No records could be allocated yet — ${stillUnmatched} still unallocated. Add the missing Customer Account or Product Code (with a Retail Plan) first.`,
+    };
   }
   return {
-    success: `Re-matched ${reMatched} record${reMatched === 1 ? "" : "s"}. ${stillUnmatched} still unmatched.`,
+    success: `Allocated ${reMatched} record${reMatched === 1 ? "" : "s"}. ${stillUnmatched} still unallocated.`,
   };
 }
 
-/** Manually attaches a customer to a priced charge record that had no automatic customer match. */
-export async function assignChargeCustomerAction(recordId: string, customerId: string): Promise<ActionState> {
+/**
+ * Manually allocates an unallocated charge to a Customer Account chosen by the
+ * admin. The Product Code still has to resolve (with pricing) for the charge
+ * to become billable.
+ */
+export async function assignChargeCustomerAction(recordId: string, accountId: string): Promise<ActionState> {
   const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
   if (!admin) return { error: "You're not authorized to perform this action." };
+  if (!mongoose.isValidObjectId(recordId) || !mongoose.isValidObjectId(accountId)) return { error: "Invalid selection." };
 
   await connectDB();
-
-  const record = await CdrChargeRecord.findById(recordId);
+  const [record, account] = await Promise.all([
+    CdrChargeRecord.findById(recordId).select("importBatch status").lean(),
+    CustomerAccount.findById(accountId).select("accountNumber customer").lean(),
+  ]);
   if (!record) return { error: "Charge record not found." };
-  if (record.customer) return { error: "This record is already assigned to a customer." };
+  if (record.status !== "UNMATCHED") return { error: "This record is not unallocated." };
+  if (!account) return { error: "Customer Account not found." };
 
-  const customer = await User.findOne({ _id: customerId, role: "CUSTOMER" });
-  if (!customer) return { error: "Customer not found." };
-
-  record.customer = customer._id;
-  record.customerCode = customer.customerCode ?? "";
-  await record.save();
+  const batchId = record.importBatch.toString();
+  const { reMatched } = await reprocessUnmatchedRecords(batchId, admin.id, { recordIds: [recordId], forcedAccountId: accountId });
 
   await ActivityLog.create({
     actor: admin.id,
-    targetCustomer: customer._id,
+    targetCustomer: account.customer,
+    targetAccount: account._id,
     action: "CDR_PRICING_REPROCESSED",
-    meta: { event: "MANUAL_CUSTOMER_ASSIGN", recordId },
+    meta: { event: "MANUAL_ACCOUNT_ASSIGN", recordId, accountNumber: account.accountNumber, allocated: reMatched === 1 },
   });
 
-  revalidatePath(`/admin/billing/cdr-import/${record.importBatch.toString()}`);
-  return { success: `Assigned to ${customer.name}.` };
+  revalidatePath(`/admin/billing/cdr-import/${batchId}`);
+  if (reMatched === 0) {
+    return {
+      error: `Assigned to account ${account.accountNumber}, but the Product Code is still not valid or has no Retail Plan — fix the product, then reprocess.`,
+    };
+  }
+  return { success: `Allocated to account ${account.accountNumber}.` };
 }

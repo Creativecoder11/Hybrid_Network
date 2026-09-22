@@ -1,49 +1,31 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { ArrowLeft, Download, AlertTriangle, FileCheck2, Files, UserX } from "lucide-react";
+import { ArrowLeft, Download, AlertTriangle, FileCheck2, Files, UserX, Copy } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
-import { assignUnmatchedRecordAction } from "@/lib/actions/cdr";
-import { formatDateTime, formatNumber, formatPeriodMonth } from "@/lib/utils/format";
+import { UnallocatedAlertBanner, type ReasonCount } from "@/components/admin/UnallocatedAlertBanner";
+import { AssignAccountControl, type AccountOption } from "@/components/admin/AssignAccountControl";
+import { assignUnmatchedRecordAction, reprocessCdrBatchAction } from "@/lib/actions/cdr";
+import { formatDate, formatDateTime, formatNumber, formatPeriodMonth } from "@/lib/utils/format";
 import type { CdrBatchRow, UnmatchedCdrRow } from "@/lib/types/cdr";
 
 export function CdrBatchDetailClient({
   batch,
   unmatchedRows,
-  customerOptions,
+  reasons,
+  accountOptions,
 }: {
   batch: CdrBatchRow;
   unmatchedRows: UnmatchedCdrRow[];
-  customerOptions: { id: string; label: string }[];
+  reasons: ReasonCount[];
+  accountOptions: AccountOption[];
 }) {
-  const router = useRouter();
-  const [selections, setSelections] = useState<Record<string, string>>({});
-  const [assigning, setAssigning] = useState<string | null>(null);
-
-  async function handleAssign(recordId: string) {
-    const customerId = selections[recordId];
-    if (!customerId) {
-      toast.error("Pick a customer first.");
-      return;
-    }
-    setAssigning(recordId);
-    const result = await assignUnmatchedRecordAction(recordId, customerId);
-    setAssigning(null);
-    if (result?.error) toast.error(result.error);
-    else {
-      toast.success(result?.success ?? "Assigned.");
-      router.refresh();
-    }
-  }
+  const reportHref = `/api/admin/cdr/${batch.id}/unmatched`;
 
   return (
     <div className="space-y-6">
@@ -64,25 +46,50 @@ export function CdrBatchDetailClient({
             </Badge>
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            {batch.provider} · {batch.periodMonth ? formatPeriodMonth(batch.periodMonth) : "Unknown period"} ·
-            Uploaded by {batch.uploadedByName} · {formatDateTime(batch.createdAt)}
+            {batch.provider} · {batch.periodMonth ? formatPeriodMonth(batch.periodMonth) : "Unknown period"} · Uploaded by{" "}
+            {batch.uploadedByName} · {formatDateTime(batch.createdAt)}
+          </p>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Upload ID <span className="font-mono">{batch.id}</span> ·{" "}
+            {batch.distinctCustomerCodes > 1
+              ? `Bulk file — ${formatNumber(batch.distinctCustomerCodes)} customer codes`
+              : batch.distinctCustomerCodes === 1
+                ? "Single-customer file"
+                : "No customer codes found"}
           </p>
         </div>
         {unmatchedRows.length > 0 && (
-          <a href={`/api/admin/cdr/${batch.id}/unmatched`}>
+          <a href={reportHref}>
             <Button variant="outline">
               <Download className="size-4" />
-              Download Unmatched CSV
+              Unallocated Report (.csv)
             </Button>
           </a>
         )}
       </div>
 
+      <UnallocatedAlertBanner
+        pipeline="RATED"
+        batchId={batch.id}
+        totalRows={batch.matchedRows + batch.unmatchedRows + batch.duplicateRows}
+        allocatedRows={batch.matchedRows}
+        unallocatedRows={batch.unmatchedRows}
+        reasons={reasons}
+        reportHref={reportHref}
+        acknowledged={batch.alertAcknowledged}
+        onReprocess={() => reprocessCdrBatchAction(batch.id)}
+      />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total Rows" value={formatNumber(batch.totalRows)} icon={Files} tone="blue" />
-        <StatCard label="Matched" value={formatNumber(batch.matchedRows)} icon={FileCheck2} tone="green" />
-        <StatCard label="Unmatched" value={formatNumber(batch.unmatchedRows)} icon={UserX} tone="amber" />
-        <StatCard label="Skipped (totals row)" value={formatNumber(batch.skippedRows)} tone="neutral" />
+        <StatCard label="Allocated" value={formatNumber(batch.matchedRows)} icon={FileCheck2} tone="green" />
+        <StatCard label="Unallocated" value={formatNumber(batch.unmatchedRows)} icon={UserX} tone="amber" />
+        <StatCard
+          label="Duplicates / Skipped"
+          value={`${formatNumber(batch.duplicateRows)} / ${formatNumber(batch.skippedRows)}`}
+          icon={Copy}
+          tone="neutral"
+        />
       </div>
 
       {batch.errorLog.length > 0 && (
@@ -90,7 +97,7 @@ export function CdrBatchDetailClient({
           <CardContent className="pt-5">
             <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red">
               <AlertTriangle className="size-3.5" />
-              Errors
+              Processing notes
             </p>
             <ul className="list-inside list-disc space-y-1 text-xs text-text-secondary">
               {batch.errorLog.map((e, i) => (
@@ -102,9 +109,9 @@ export function CdrBatchDetailClient({
       )}
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-text-primary">Unmatched Rows</h2>
+        <h2 className="mb-3 text-sm font-semibold text-text-primary">Unallocated Records</h2>
         {unmatchedRows.length === 0 ? (
-          <EmptyState icon={FileCheck2} title="Every row matched a customer" />
+          <EmptyState icon={FileCheck2} title="Every record was allocated" />
         ) : (
           <TableContainer>
             <Table>
@@ -112,46 +119,27 @@ export function CdrBatchDetailClient({
                 <TR>
                   <TH>Cdr ID</TH>
                   <TH>Customer Code</TH>
-                  <TH>ICCID</TH>
-                  <TH>Card Name</TH>
-                  <TH>Period</TH>
+                  <TH>Product Code</TH>
+                  <TH>Date</TH>
                   <TH>Data Volume</TH>
-                  <TH>Assign To</TH>
-                  <TH />
+                  <TH>Reason</TH>
+                  <TH>Allocate To</TH>
                 </TR>
               </THead>
               <TBody>
                 {unmatchedRows.map((r) => (
                   <TR key={r.id}>
-                    <TD className="font-mono text-xs">{r.cdrId}</TD>
-                    <TD>{r.customerCode || "--"}</TD>
-                    <TD className="font-mono text-xs">{r.iccid || "--"}</TD>
-                    <TD>{r.cardName || "--"}</TD>
-                    <TD>{formatPeriodMonth(r.period)}</TD>
+                    <TD className="font-mono text-xs">{r.cdrId || "--"}</TD>
+                    <TD className="font-mono text-xs">{r.customerCode || "--"}</TD>
+                    <TD className="font-mono text-xs">{r.productCode || "--"}</TD>
+                    <TD>{r.startCdr ? formatDate(r.startCdr) : formatPeriodMonth(r.period)}</TD>
                     <TD>{r.volumeDataGB.toFixed(2)} GB</TD>
-                    <TD>
-                      <Select
-                        className="h-8 w-48 py-0 text-xs"
-                        value={selections[r.id] ?? ""}
-                        onChange={(e) => setSelections((s) => ({ ...s, [r.id]: e.target.value }))}
-                      >
-                        <option value="">Select customer...</option>
-                        {customerOptions.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </Select>
+                    <TD className="max-w-xs text-xs" title={r.reason}>
+                      <span className="block font-medium text-amber">{r.reasonLabel}</span>
+                      <span className="line-clamp-2 text-text-muted">{r.reason}</span>
                     </TD>
                     <TD>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        loading={assigning === r.id}
-                        onClick={() => handleAssign(r.id)}
-                      >
-                        Assign
-                      </Button>
+                      <AssignAccountControl recordId={r.id} accounts={accountOptions} onAssign={assignUnmatchedRecordAction} />
                     </TD>
                   </TR>
                 ))}

@@ -55,8 +55,10 @@ export type TrashedInvoiceRow = {
   deletedAt: string;
 };
 
+/** One Customer Account with an active subscription that can be billed. */
 export type BillableCustomerOption = {
   id: string;
+  accountId: string;
   label: string;
   customerCode: string;
   customerSince: string;

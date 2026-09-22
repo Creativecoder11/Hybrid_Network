@@ -1,18 +1,41 @@
-import { Document, Page, View, Text, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, View, Text, Image, StyleSheet, Font } from "@react-pdf/renderer";
 
 export type InvoicePdfData = {
   invoiceNumber: string;
   issueDate: string;
   dueDate: string;
+  billingPeriod: string;
   status: string;
-  customer: { name: string; customerId: string; email: string; address: string; company: string };
-  company: { name: string; address: string; email: string; phone: string };
+  customer: {
+    name: string;
+    company: string;
+    customerId: string;
+    accountNumber: string;
+    accountName: string;
+    email: string;
+    phone: string;
+    address: string;
+  };
+  company: {
+    name: string;
+    legalName: string;
+    abn: string;
+    address: string;
+    email: string;
+    phone: string;
+    website: string;
+    paymentInstructions: string;
+  };
+  /** PNG logo (white wordmark, drawn on the navy header band). */
+  logo: Buffer | null;
   lineItems: { description: string; quantity: number; unit: string; unitPrice: number; amount: number }[];
   subtotal: number;
   taxLabel: string;
   taxRate: number;
   taxAmount: number;
   total: number;
+  amountPaid: number;
+  balanceDue: number;
   currency: string;
   usageSummary: { dataGB: number; voiceMin: number; sms: number } | null;
   paymentMethod?: string;
@@ -20,41 +43,30 @@ export type InvoicePdfData = {
   lastInvoices?: { periodMonth: string; total: number }[];
 };
 
+const NAVY = "#0B1B33";
 const BLUE = "#0f6fd6";
 const BLUE_DARK = "#0b3f7a";
 const INK = "#111827";
+const MUTED = "#6B7280";
+const LINE = "#E5E7EB";
 
 const styles = StyleSheet.create({
-  page: {
-    padding: 36,
-    fontSize: 9,
-    fontFamily: "Helvetica",
-    color: INK,
-  },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  brand: { fontSize: 18, fontWeight: 700, color: BLUE_DARK },
-  brandSub: { fontSize: 8, color: "#6B7280", marginTop: 2 },
-  invoiceTitle: { fontSize: 16, fontWeight: 700, textAlign: "right", color: INK },
-  invoiceTitleSub: { fontSize: 8, color: BLUE, textAlign: "right", marginTop: 2 },
-  headerDivider: { marginTop: 14, marginBottom: 18, height: 2, backgroundColor: BLUE },
-
-  twoCol: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },
-  colBlock: { width: "46%" },
-  label: { fontSize: 7.5, color: "#6B7280", textTransform: "uppercase", marginBottom: 3, letterSpacing: 0.5 },
-  value: { fontSize: 9.5, marginBottom: 2 },
-  metaRow: {
+  page: { paddingBottom: 48, fontSize: 9, fontFamily: "Helvetica", color: INK },
+  band: {
+    backgroundColor: NAVY,
+    paddingHorizontal: 36,
+    paddingVertical: 18,
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    alignItems: "center",
   },
-  metaLabel: { fontSize: 8.5, color: "#6B7280" },
-  metaValue: { fontSize: 8.5, fontWeight: 700, color: INK },
-
+  logo: { width: 150, height: 44, objectFit: "contain" },
+  brandText: { fontSize: 18, fontWeight: 700, color: "#ffffff" },
+  bandRight: { alignItems: "flex-end" },
+  invoiceTitle: { fontSize: 16, fontWeight: 700, color: "#ffffff", letterSpacing: 1 },
+  invoiceTitleSub: { fontSize: 9, color: "#93C5FD", marginTop: 2 },
   statusPill: {
-    alignSelf: "flex-end",
-    marginTop: 8,
+    marginTop: 6,
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 10,
@@ -63,88 +75,60 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
 
-  panelRow: { flexDirection: "row", gap: 16 },
-  chargesPanel: { width: "58%", borderWidth: 1, borderColor: "#DBEAFE", borderRadius: 4, overflow: "hidden" },
-  chargesHeader: { backgroundColor: BLUE, paddingVertical: 8, paddingHorizontal: 10 },
-  chargesHeaderText: { fontSize: 11, fontWeight: 700, color: "#ffffff" },
-  chargesBody: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 },
-  chargeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EFF6FF",
-  },
-  chargeDesc: { fontSize: 8.5, width: "70%" },
-  chargeAmount: { fontSize: 8.5, width: "30%", textAlign: "right" },
-  totalsWrap: { paddingHorizontal: 10, paddingBottom: 10, marginTop: 4 },
+  body: { paddingHorizontal: 36, paddingTop: 20 },
+  twoCol: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18 },
+  colBlock: { width: "48%" },
+  label: { fontSize: 7.5, color: MUTED, textTransform: "uppercase", marginBottom: 4, letterSpacing: 0.5 },
+  strong: { fontSize: 10, fontWeight: 700, marginBottom: 2 },
+  value: { fontSize: 9, marginBottom: 1.5, color: "#374151" },
+
+  metaGrid: { flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: LINE, borderRadius: 4, marginBottom: 18 },
+  metaCell: { width: "33.33%", paddingVertical: 7, paddingHorizontal: 10, borderRightWidth: 1, borderBottomWidth: 1, borderColor: LINE },
+  metaLabel: { fontSize: 7, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 },
+  metaValue: { fontSize: 9, fontWeight: 700, color: INK, marginTop: 2 },
+
+  table: { borderWidth: 1, borderColor: "#DBEAFE", borderRadius: 4 },
+  thead: { flexDirection: "row", backgroundColor: BLUE, paddingVertical: 7, paddingHorizontal: 10 },
+  th: { fontSize: 8, fontWeight: 700, color: "#ffffff" },
+  tr: { flexDirection: "row", paddingVertical: 6, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#EFF6FF" },
+  td: { fontSize: 8.5 },
+  cDesc: { width: "52%" },
+  cQty: { width: "14%", textAlign: "right" },
+  cUnit: { width: "16%", textAlign: "right" },
+  cAmt: { width: "18%", textAlign: "right" },
+
+  totals: { alignSelf: "flex-end", width: "46%", marginTop: 10 },
   totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
   totalsLabel: { fontSize: 8.5, color: "#4B5563" },
   totalsValue: { fontSize: 8.5 },
-  grandTotalRow: {
+  grandRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 6,
-    paddingTop: 8,
-    paddingHorizontal: 10,
-    paddingBottom: 8,
+    marginTop: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
     backgroundColor: "#EFF6FF",
   },
-  grandTotalLabel: { fontSize: 11, fontWeight: 700, color: BLUE_DARK },
-  grandTotalValue: { fontSize: 13, fontWeight: 700, color: BLUE_DARK },
+  grandLabel: { fontSize: 10.5, fontWeight: 700, color: BLUE_DARK },
+  grandValue: { fontSize: 12, fontWeight: 700, color: BLUE_DARK },
 
-  sidePanel: { width: "42%" },
-  infoBox: { marginBottom: 12 },
-  infoBoxTitle: { fontSize: 9, fontWeight: 700, color: INK, marginBottom: 4 },
-  infoBoxText: { fontSize: 8, color: "#4B5563", lineHeight: 1.5 },
-  contactRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
-  contactLabel: { fontSize: 8, color: "#6B7280" },
-  contactValue: { fontSize: 8, color: INK },
+  panelRow: { flexDirection: "row", gap: 14, marginTop: 18 },
+  panel: { flex: 1, borderWidth: 1, borderColor: LINE, borderRadius: 4, padding: 10 },
+  panelTitle: { fontSize: 8.5, fontWeight: 700, color: INK, marginBottom: 4 },
+  panelText: { fontSize: 8, color: "#4B5563", lineHeight: 1.5 },
 
-  barRow: { marginTop: 6 },
-  barLabelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  barLabel: { fontSize: 7.5, color: "#6B7280" },
-  barValue: { fontSize: 7.5, color: INK },
-  barTrack: { height: 5, backgroundColor: "#E5F9F0", borderRadius: 3, overflow: "hidden" },
-  barFill: { height: 5, backgroundColor: "#10B981", borderRadius: 3 },
-
-  usageBox: {
-    marginTop: 16,
-    padding: 10,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 4,
+  footer: {
+    position: "absolute",
+    bottom: 18,
+    left: 36,
+    right: 36,
+    fontSize: 6.5,
+    color: "#9CA3AF",
+    textAlign: "center",
+    borderTopWidth: 1,
+    borderTopColor: LINE,
+    paddingTop: 6,
   },
-  usageTitle: { fontSize: 8, fontWeight: 700, color: "#374151", textTransform: "uppercase", marginBottom: 6 },
-  usageRow: { flexDirection: "row", gap: 24 },
-  usageStat: { fontSize: 9 },
-
-  paymentPanel: {
-    marginTop: 16,
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 4,
-    padding: 12,
-    gap: 20,
-  },
-  paymentCol: { flex: 1 },
-  paymentTitle: { fontSize: 8.5, fontWeight: 700, color: INK, marginBottom: 4 },
-  paymentText: { fontSize: 8, color: "#4B5563", lineHeight: 1.5 },
-
-  footerBanner: {
-    marginTop: 18,
-    backgroundColor: BLUE_DARK,
-    borderRadius: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  footerTagline: { fontSize: 9, color: "#ffffff", width: "70%", lineHeight: 1.4 },
-  footerBrand: { fontSize: 11, fontWeight: 700, color: "#ffffff" },
-
-  regFooter: { marginTop: 10, fontSize: 6.5, color: "#9CA3AF", textAlign: "center" },
 });
 
 const STATUS_COLORS: Record<string, string> = {
@@ -168,22 +152,36 @@ function formatPeriodLabel(periodMonth: string) {
   return `${names[month - 1] ?? ""} ${year}`;
 }
 
+function formatAbn(abn: string) {
+  const d = abn.replace(/\s+/g, "");
+  return d.length === 11 ? `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8)}` : abn;
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metaCell}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text style={styles.metaValue}>{value || "--"}</Text>
+    </View>
+  );
+}
+
 export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
   const lastInvoices = data.lastInvoices ?? [];
-  const maxLastInvoice = Math.max(1, ...lastInvoices.map((i) => i.total));
+  const c = data.company;
+  const taxInclusiveLabel = `Total (incl. ${data.taxLabel})`;
 
   return (
-    <Document>
+    <Document title={`Tax Invoice ${data.invoiceNumber}`} author={c.legalName}>
       <Page size="A4" style={styles.page}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.brand}>{data.company.name.toUpperCase()}</Text>
-            <Text style={styles.brandSub}>{data.company.address || "ISP Distributor Portal"}</Text>
-            <Text style={styles.brandSub}>
-              {data.company.email} {data.company.phone ? `· ${data.company.phone}` : ""}
-            </Text>
-          </View>
-          <View>
+        <View style={styles.band}>
+          {data.logo ? (
+            // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop
+            <Image style={styles.logo} src={data.logo} />
+          ) : (
+            <Text style={styles.brandText}>{c.name}</Text>
+          )}
+          <View style={styles.bandRight}>
             <Text style={styles.invoiceTitle}>TAX INVOICE</Text>
             <Text style={styles.invoiceTitleSub}>{data.invoiceNumber}</Text>
             <View style={[styles.statusPill, { backgroundColor: STATUS_COLORS[data.status] ?? "#6B7280" }]}>
@@ -191,157 +189,131 @@ export function InvoiceDocument({ data }: { data: InvoicePdfData }) {
             </View>
           </View>
         </View>
-        <View style={styles.headerDivider} />
 
-        <View style={styles.twoCol}>
-          <View style={styles.colBlock}>
-            <Text style={styles.label}>Billed To</Text>
-            <Text style={styles.value}>{data.customer.name}</Text>
-            {data.customer.company ? <Text style={styles.value}>{data.customer.company}</Text> : null}
-            <Text style={styles.value}>{data.customer.address}</Text>
-            <Text style={styles.value}>{data.customer.email}</Text>
+        <View style={styles.body}>
+          <View style={styles.twoCol}>
+            <View style={styles.colBlock}>
+              <Text style={styles.label}>From</Text>
+              <Text style={styles.strong}>{c.legalName}</Text>
+              {c.abn ? <Text style={styles.value}>ABN {formatAbn(c.abn)}</Text> : null}
+              {c.address ? <Text style={styles.value}>{c.address}</Text> : null}
+              {c.email ? <Text style={styles.value}>{c.email}</Text> : null}
+              {c.phone ? <Text style={styles.value}>{c.phone}</Text> : null}
+              {c.website ? <Text style={styles.value}>{c.website}</Text> : null}
+            </View>
+            <View style={styles.colBlock}>
+              <Text style={styles.label}>Bill To</Text>
+              <Text style={styles.strong}>{data.customer.company || data.customer.name}</Text>
+              {data.customer.company ? <Text style={styles.value}>Attn: {data.customer.name}</Text> : null}
+              {data.customer.address ? <Text style={styles.value}>{data.customer.address}</Text> : null}
+              <Text style={styles.value}>{data.customer.email}</Text>
+              {data.customer.phone ? <Text style={styles.value}>{data.customer.phone}</Text> : null}
+            </View>
           </View>
-          <View style={styles.colBlock}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Invoice Number</Text>
-              <Text style={styles.metaValue}>{data.invoiceNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Invoice Date</Text>
-              <Text style={styles.metaValue}>{data.issueDate}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Payment Due Date</Text>
-              <Text style={styles.metaValue}>{data.dueDate}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Customer ID</Text>
-              <Text style={styles.metaValue}>{data.customer.customerId || "--"}</Text>
-            </View>
-            {data.paidDate ? (
-              <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Paid Date</Text>
-                <Text style={styles.metaValue}>{data.paidDate}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
 
-        <View style={styles.panelRow}>
-          <View style={styles.chargesPanel}>
-            <View style={styles.chargesHeader}>
-              <Text style={styles.chargesHeaderText}>Charges</Text>
+          <View style={styles.metaGrid}>
+            <Meta label="Invoice Number" value={data.invoiceNumber} />
+            <Meta label="Invoice Date" value={data.issueDate} />
+            <Meta label="Due Date" value={data.dueDate} />
+            <Meta label="Customer Account No." value={data.customer.accountNumber} />
+            <Meta label="Customer ID" value={data.customer.customerId} />
+            <Meta label="Billing Period" value={data.billingPeriod} />
+          </View>
+
+          <View style={styles.table}>
+            <View style={styles.thead}>
+              <Text style={[styles.th, styles.cDesc]}>Description</Text>
+              <Text style={[styles.th, styles.cQty]}>Qty</Text>
+              <Text style={[styles.th, styles.cUnit]}>Unit Price</Text>
+              <Text style={[styles.th, styles.cAmt]}>Amount</Text>
             </View>
-            <View style={styles.chargesBody}>
-              {data.lineItems.map((item, i) => (
-                <View style={styles.chargeRow} key={i}>
-                  <Text style={styles.chargeDesc}>{item.description}</Text>
-                  <Text style={styles.chargeAmount}>{money(item.amount, data.currency)}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.totalsWrap}>
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsLabel}>Net Amount</Text>
-                <Text style={styles.totalsValue}>{money(data.subtotal, data.currency)}</Text>
-              </View>
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsLabel}>
-                  {data.taxLabel} @ {data.taxRate.toFixed(2)}%
+            {data.lineItems.map((item, i) => (
+              <View style={styles.tr} key={i} wrap={false}>
+                <Text style={[styles.td, styles.cDesc]}>{item.description}</Text>
+                <Text style={[styles.td, styles.cQty]}>
+                  {item.quantity}
+                  {item.unit ? ` ${item.unit}` : ""}
                 </Text>
-                <Text style={styles.totalsValue}>{money(data.taxAmount, data.currency)}</Text>
+                <Text style={[styles.td, styles.cUnit]}>{money(item.unitPrice, data.currency)}</Text>
+                <Text style={[styles.td, styles.cAmt]}>{money(item.amount, data.currency)}</Text>
               </View>
+            ))}
+          </View>
+
+          <View style={styles.totals}>
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>Subtotal (excl. {data.taxLabel})</Text>
+              <Text style={styles.totalsValue}>{money(data.subtotal, data.currency)}</Text>
             </View>
-            <View style={styles.grandTotalRow}>
-              <Text style={styles.grandTotalLabel}>Total Due</Text>
-              <Text style={styles.grandTotalValue}>{money(data.total, data.currency)}</Text>
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>
+                {data.taxLabel} @ {data.taxRate.toFixed(2)}%
+              </Text>
+              <Text style={styles.totalsValue}>{money(data.taxAmount, data.currency)}</Text>
+            </View>
+            <View style={styles.grandRow}>
+              <Text style={styles.grandLabel}>{taxInclusiveLabel}</Text>
+              <Text style={styles.grandValue}>{money(data.total, data.currency)}</Text>
+            </View>
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>Amount paid{data.paidDate ? ` (${data.paidDate})` : ""}</Text>
+              <Text style={styles.totalsValue}>{money(data.amountPaid, data.currency)}</Text>
+            </View>
+            <View style={styles.totalsRow}>
+              <Text style={[styles.totalsLabel, { fontWeight: 700, color: INK }]}>Balance due</Text>
+              <Text style={[styles.totalsValue, { fontWeight: 700 }]}>{money(data.balanceDue, data.currency)}</Text>
             </View>
           </View>
 
-          <View style={styles.sidePanel}>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoBoxTitle}>Want to know more?</Text>
-              <Text style={styles.infoBoxText}>
-                Sign in to your customer portal for a detailed summary of your invoice and usage history.
-              </Text>
-            </View>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoBoxTitle}>Questions about your invoice?</Text>
-              <View style={styles.contactRow}>
-                <Text style={styles.contactLabel}>Email</Text>
-                <Text style={styles.contactValue}>{data.company.email}</Text>
-              </View>
-              {data.company.phone ? (
-                <View style={styles.contactRow}>
-                  <Text style={styles.contactLabel}>Phone</Text>
-                  <Text style={styles.contactValue}>{data.company.phone}</Text>
-                </View>
+          <View style={styles.panelRow} wrap={false}>
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>How to pay</Text>
+              {data.status === "PAID" ? (
+                <Text style={styles.panelText}>
+                  Paid{data.paymentMethod ? ` via ${data.paymentMethod}` : ""}{data.paidDate ? ` on ${data.paidDate}` : ""}. Thank you.
+                </Text>
+              ) : c.paymentInstructions ? (
+                <Text style={styles.panelText}>{c.paymentInstructions}</Text>
+              ) : (
+                <Text style={styles.panelText}>
+                  Please contact {c.email || c.legalName} for payment details.
+                </Text>
+              )}
+              {data.status !== "PAID" ? (
+                <Text style={[styles.panelText, { marginTop: 4 }]}>
+                  Payment reference: {data.invoiceNumber}
+                  {data.customer.accountNumber ? ` / ${data.customer.accountNumber}` : ""}
+                </Text>
               ) : null}
             </View>
-
-            {lastInvoices.length > 0 && (
-              <View style={styles.infoBox}>
-                <Text style={styles.infoBoxTitle}>Last {lastInvoices.length} Invoices</Text>
-                {lastInvoices.map((inv, i) => (
-                  <View style={styles.barRow} key={i}>
-                    <View style={styles.barLabelRow}>
-                      <Text style={styles.barLabel}>{formatPeriodLabel(inv.periodMonth)}</Text>
-                      <Text style={styles.barValue}>{money(inv.total, data.currency)}</Text>
-                    </View>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.max(4, (inv.total / maxLastInvoice) * 100)}%` }]} />
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
-
-        {data.usageSummary && (
-          <View style={styles.usageBox}>
-            <Text style={styles.usageTitle}>Usage Summary — Billing Period</Text>
-            <View style={styles.usageRow}>
-              <Text style={styles.usageStat}>Data Used: {data.usageSummary.dataGB.toFixed(2)} GB</Text>
-              <Text style={styles.usageStat}>Voice Minutes: {data.usageSummary.voiceMin}</Text>
-              <Text style={styles.usageStat}>SMS: {data.usageSummary.sms}</Text>
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Questions about this invoice?</Text>
+              <Text style={styles.panelText}>
+                {[c.email, c.phone].filter(Boolean).join(" · ") || c.legalName}
+              </Text>
+              {data.usageSummary ? (
+                <Text style={[styles.panelText, { marginTop: 4 }]}>
+                  Usage this period: {data.usageSummary.dataGB.toFixed(2)} GB data · {data.usageSummary.voiceMin} voice
+                  min · {data.usageSummary.sms} SMS
+                </Text>
+              ) : null}
+              {lastInvoices.length > 0 ? (
+                <Text style={[styles.panelText, { marginTop: 4 }]}>
+                  Previous invoices:{" "}
+                  {lastInvoices.map((inv) => `${formatPeriodLabel(inv.periodMonth)} ${money(inv.total, data.currency)}`).join(" · ")}
+                </Text>
+              ) : null}
             </View>
           </View>
-        )}
-
-        <View style={styles.paymentPanel}>
-          <View style={styles.paymentCol}>
-            <Text style={styles.paymentTitle}>Payment Method</Text>
-            <Text style={styles.paymentText}>
-              {data.paymentMethod ? data.paymentMethod : "Bank Transfer"}. Please reference your invoice number
-              when making payment.
-            </Text>
-          </View>
-          <View style={styles.paymentCol}>
-            <Text style={styles.paymentTitle}>Payment Details</Text>
-            <Text style={styles.paymentText}>
-              Contact {data.company.email} for our bank account details, or settle this invoice directly from
-              your customer portal.
-            </Text>
-          </View>
         </View>
 
-        <View style={styles.footerBanner}>
-          <Text style={styles.footerTagline}>
-            Providing trusted and reliable connectivity solutions for people, systems, and assets — wherever your
-            business operates.
-          </Text>
-          <Text style={styles.footerBrand}>{data.company.name.toUpperCase()}</Text>
-        </View>
-
-        <Text style={styles.regFooter}>
-          {data.company.name} · {data.company.address}
+        <Text style={styles.footer} fixed>
+          {[c.legalName, c.abn ? `ABN ${formatAbn(c.abn)}` : "", c.address].filter(Boolean).join(" · ")}
         </Text>
       </Page>
     </Document>
   );
 }
 
-// Silence @react-pdf's default Helvetica font registration warnings in some
-// server environments by explicitly registering standard fonts if needed.
+// Keep words whole (no hyphenation) in the built-in Helvetica font.
 Font.registerHyphenationCallback((word) => [word]);

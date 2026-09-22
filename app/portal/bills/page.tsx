@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { connectDB } from "@/lib/db/connect";
-import { Invoice } from "@/models/Invoice";
-import { requireRole } from "@/lib/auth/dal";
+import { getPortalContext } from "@/lib/accounts/access";
 import { syncOverdueStatuses } from "@/lib/billing/statusSync";
+import { listAccountInvoices } from "@/lib/portal/billing";
 import { PortalBillsClient } from "@/components/portal/PortalBillsClient";
-import type { PortalInvoiceRow } from "@/lib/types/portal";
+import { NoAccountState } from "@/components/portal/NoAccountState";
 
 export const metadata: Metadata = {
   title: "My Bills | Hybrid Networks Portal",
@@ -15,28 +14,14 @@ export default async function PortalBillsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireRole(["CUSTOMER"], "/admin");
+  const ctx = await getPortalContext();
+  if (!ctx.account) return <NoAccountState title="My Bills" />;
+
   const sp = await searchParams;
   const status = typeof sp.status === "string" ? sp.status : "ALL";
 
   await syncOverdueStatuses();
-  await connectDB();
+  const rows = await listAccountInvoices(ctx.account, { status: status === "ALL" ? undefined : status });
 
-  const filter: Record<string, unknown> = { customer: user.id };
-  if (status !== "ALL") filter.status = status;
-
-  const invoices = await Invoice.find(filter).sort({ issueDate: -1 }).lean();
-
-  const rows: PortalInvoiceRow[] = invoices.map((inv) => ({
-    id: inv._id.toString(),
-    invoiceNumber: inv.invoiceNumber,
-    periodMonth: inv.periodMonth,
-    issueDate: (inv.issueDate as Date).toISOString(),
-    dueDate: (inv.dueDate as Date).toISOString(),
-    total: inv.total,
-    currency: inv.currency ?? "USD",
-    status: inv.status,
-  }));
-
-  return <PortalBillsClient rows={rows} status={status} />;
+  return <PortalBillsClient rows={rows} status={status} accountNumber={ctx.account.accountNumber} />;
 }

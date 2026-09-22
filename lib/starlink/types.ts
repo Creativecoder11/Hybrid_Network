@@ -1,8 +1,8 @@
-// Shapes below are transcribed from live responses recorded against the real
-// SLASH API (https://slash-api.rudra.sh/api/v1) during integration, not from
-// the (client-rendered, non-static) docs page. Fields the sandbox tenant's
-// single test device always returned empty/zero (e.g. connectivityStats) are
-// typed loosely since their populated shape hasn't been observed yet.
+// Shapes below follow the official SLASH API specification (the Swagger 2.0
+// document embedded in https://slash-prod.web.app/docs — a client-rendered
+// page, so the spec was extracted from its shipped bundle; see
+// docs/slash-api-integration-plan.md §10). Fields are typed optional/nullable
+// wherever the spec says they may be omitted or null.
 
 export type SlashUserTerminal = {
   userTerminalId: string;
@@ -45,7 +45,7 @@ export type SlashDataUsage = {
   totalGB: number;
   billingCycleStart: string;
   billingCycleEnd: string;
-  lastUpdatedAt: string;
+  lastUpdatedAt: string | null;
 };
 
 export type SlashVesselDataUsageResponse = {
@@ -53,18 +53,27 @@ export type SlashVesselDataUsageResponse = {
   dataUsage: SlashDataUsage;
 };
 
+// Per the official spec (models.ServicePlan): fields the upstream data
+// doesn't expose are null/omitted rather than defaulted.
 export type SlashServicePlan = {
   planName: string;
   priorityDataGB: number | null;
   standardDataGB: number | null;
+  /** Data allocated for the current cycle, pro-rated for a mid-cycle start. */
+  allocatedDataGB?: number | null;
+  blockDataGB?: number | null;
+  topUpDataGB?: number | null;
   price: number | null;
   currency: string;
   isOptedIntoOverage: boolean;
-  overageName: string | null;
-  overageDescription: string | null;
+  overageName?: string | null;
+  overageDescription?: string | null;
   billingCycleStart: string;
   billingCycleEnd: string;
   autoRenew: boolean | null;
+  currentActivationDate?: string | null;
+  firstActivationDate?: string | null;
+  subscriptionEndDate?: string | null;
 };
 
 export type SlashVesselServicePlanResponse = {
@@ -77,6 +86,9 @@ export type SlashLocation = {
   longitude: number;
   timestamp: string;
   h3CellId: string;
+  marineRegionName?: string;
+  marineRegionType?: string;
+  marineRegionDescription?: string;
 };
 
 export type SlashVesselLocationResponse = {
@@ -101,16 +113,83 @@ export type SlashVesselConnectivityStatusResponse = {
   connectivityStats: unknown[];
 };
 
+// GET /alerts/user-terminals — one alert EPISODE per (device, account, alert)
+// in the requested window (models.UserTerminalAlert in the official spec).
 export type SlashAlertEpisode = {
-  id?: string;
-  userTerminalId?: string;
-  vesselId?: string;
-  type?: string;
-  message?: string;
-  severity?: string;
-  startedAt?: string;
-  endedAt?: string | null;
-  [key: string]: unknown;
+  accountNumber?: string;
+  active?: boolean;
+  alertDescription?: string;
+  alertId?: number;
+  alertName?: string;
+  deviceId?: string;
+  firstSeen?: string;
+  lastSeen?: string;
+  sampleCount?: number;
+  timestamp?: string;
+};
+
+// GET /telemetry/vessels/latest — latest telemetry row per (vessel, device)
+// (models.VesselLatestTelemetry). `stale` is relative to the request's
+// timeRangeHours window; lastSeenAt is null when the device has been silent
+// for longer than the 7-day retention of the latest-telemetry view.
+export type SlashVesselLatestTelemetry = {
+  vesselId: string;
+  vesselName?: string;
+  vesselSerialNumber?: string;
+  serviceLineNumber?: string;
+  deviceId: string;
+  stale?: boolean;
+  lastSeenAt?: string | null;
+  latestTelemetryTimestamp?: string | null;
+  signalQualityPercent?: number | null;
+  downlinkThroughputMbps?: number | null;
+  uplinkThroughputMbps?: number | null;
+  pingLatencyMsAvg?: number | null;
+  pingDropRateAvg?: number | null;
+  obstructionPercentTime?: number | null;
+  uptimeSeconds?: number | null;
+  runningSoftwareVersion?: string | null;
+  secondsUntilSwupdateRebootPossible?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  h3CellId?: string | null;
+  marineRegionName?: string | null;
+  activeAlertCount?: number | null;
+  terminalAlertName?: string | null;
+  terminalAlertDescription?: string | null;
+  latestTerminalAlertTimestamp?: string | null;
+};
+
+export type SlashVesselLatestTelemetryResponse = {
+  data: SlashVesselLatestTelemetry[] | null;
+  pageIndex: number;
+  pageSize: number;
+  totalCount: number;
+};
+
+// GET /vessels/{vesselId}/data-usage/history — one point per day.
+export type SlashDataUsageHistoryPoint = {
+  date: string;
+  priorityGB: number;
+  standardGB: number;
+  optInPriorityGB: number;
+  nonBillableGB: number;
+  totalGB: number;
+  lastUpdatedAt?: string | null;
+};
+
+export type SlashVesselDataUsageHistoryResponse = {
+  vesselId: string;
+  timeRange: { startDate: string; endDate: string };
+  historyPoints: SlashDataUsageHistoryPoint[] | null;
+  totalCount: number;
+  page: number;
+  limit: number;
+};
+
+export type SlashAllVesselsLocationResponse = {
+  totalCount: number;
+  vessels: { vesselId: string; vesselName?: string; location: SlashLocation }[] | null;
 };
 
 export type SlashUserTerminalAlertsResponse = {

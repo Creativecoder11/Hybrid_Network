@@ -52,12 +52,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           ) : isCustomer ? (
             <>
               <h2 className="mt-4 text-5xl font-extrabold leading-tight text-text-primary">
-                Monitor your network <br />&amp; billing with ease.
+                Monitor your network <br />&amp; billing
               </h2>
-              <p className="mt-4 text-lg leading-relaxed text-slate-300">
-                Track live data usage, inspect terminal telemetry, view and pay invoices,
-                and access 24/7 technical support in one place.
-              </p>
             </>
           ) : (
             <>

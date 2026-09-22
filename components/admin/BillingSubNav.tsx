@@ -9,7 +9,7 @@ const TABS = [
   { href: "/admin/billing/cdr-import", label: "CDR Import" },
   { href: "/admin/billing/cdr-records", label: "CDR Records" },
   { href: "/admin/billing/retail-plans", label: "Retail Plans" },
-  { href: "/admin/billing/identifier-mapping", label: "Identifier Mapping" },
+  { href: "/admin/billing/identifier-mapping", label: "Product Codes" },
 ];
 
 export function BillingSubNav() {

@@ -32,7 +32,9 @@ function countBy<T extends string>(items: T[]): Map<T, number> {
 
 export function AnalyticsPageClient({ terminals, fleet }: { terminals: TerminalRecord[]; fleet: FleetOverviewStats }) {
   const statusCounts = countBy(terminals.map((t) => t.status));
-  const linkQualityCounts = countBy(terminals.map((t) => t.network.linkQuality));
+  const linkQualityCounts = countBy(
+    terminals.map((t) => t.network.linkQuality).filter((q): q is LinkQuality => q !== null)
+  );
   const onlineRate = fleet.total > 0 ? Math.round((fleet.online / fleet.total) * 100) : 0;
   const maxStatusCount = Math.max(1, ...[...statusCounts.values()]);
   const maxLinkQualityCount = Math.max(1, ...[...linkQualityCounts.values()]);
@@ -44,9 +46,8 @@ export function AnalyticsPageClient({ terminals, fleet }: { terminals: TerminalR
         <div className="mt-1 flex items-start gap-1.5 text-xs text-text-muted">
           <Info className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            Computed by this app from the terminal records it already fetches. The SLASH API&apos;s
-            <code className="mx-1">/analytics/fleet/*</code>
-            endpoints referenced in the spec are not confirmed to exist — see docs/slash-api-integration-plan.md.
+            Computed by this app from live SLASH telemetry (<code className="mx-1">/telemetry/vessels/latest</code>) for
+            every terminal. Averages include only terminals that are online and reported the metric.
           </span>
         </div>
       </div>
@@ -54,8 +55,18 @@ export function AnalyticsPageClient({ terminals, fleet }: { terminals: TerminalR
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Fleet Online Rate" value={`${onlineRate}%`} tone="green" animatedBorder />
         <StatCard label="Active Services" value={String(fleet.activeServices)} tone="blue" animatedBorder />
-        <StatCard label="Avg Uptime" value={`${fleet.connectivity.avgUptimePct}%`} tone="purple" animatedBorder />
-        <StatCard label="Avg Throughput" value={`${fleet.connectivity.avgThroughputMbps} Mbps`} tone="amber" animatedBorder />
+        <StatCard
+          label="Avg Signal Quality (online)"
+          value={fleet.connectivity.avgSignalQualityPct === null ? "Not available" : `${fleet.connectivity.avgSignalQualityPct}%`}
+          tone="purple"
+          animatedBorder
+        />
+        <StatCard
+          label="Avg Downlink (online)"
+          value={fleet.connectivity.avgThroughputMbps === null ? "Not available" : `${fleet.connectivity.avgThroughputMbps} Mbps`}
+          tone="amber"
+          animatedBorder
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -81,6 +92,11 @@ export function AnalyticsPageClient({ terminals, fleet }: { terminals: TerminalR
         <Card className="p-5">
           <p className="text-sm font-semibold text-text-primary">Link Quality Distribution</p>
           <p className="mb-4 text-xs text-text-muted">Terminals by reported link quality</p>
+          {linkQualityCounts.size === 0 && (
+            <p className="py-6 text-center text-xs text-text-muted">
+              Link quality is not reported by the SLASH API for Starlink terminals.
+            </p>
+          )}
           <div className="space-y-4">
             {LINK_QUALITY_ORDER.filter((q) => (linkQualityCounts.get(q) ?? 0) > 0).map((q) => (
               <LabeledProgress

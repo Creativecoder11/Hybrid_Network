@@ -16,8 +16,11 @@ export async function listVessels(): Promise<SlashVessel[]> {
   const all: SlashVessel[] = [];
 
   for (;;) {
+    // includeInactive: the API hides vessels whose service line is inactive
+    // unless asked — without it a suspended customer's terminal would just
+    // vanish from the fleet instead of showing as inactive.
     const raw = await starlinkFetch<SlashVesselListResponse>("/vessels", {
-      query: { page, limit },
+      query: { page, limit, includeInactive: true },
       revalidateSeconds: VESSEL_LIST_REVALIDATE_SECONDS,
     });
     const res = validateSlashResponse(slashVesselListResponseSchema, raw, "GET /vessels");

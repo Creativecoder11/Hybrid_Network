@@ -76,7 +76,7 @@ export function CreateBillModal({
       open
       onClose={onClose}
       title="Create New Bill"
-      description="Create an account and assign a service plan"
+      description="Bill one Customer Account for its active service plan"
       size="lg"
       footer={
         <>
@@ -100,6 +100,7 @@ export function CreateBillModal({
         }}
       >
         <input type="hidden" name="customerId" value={selected?.id ?? ""} />
+        <input type="hidden" name="customerAccountId" value={selected?.accountId ?? ""} />
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-green">Customer</p>
@@ -107,7 +108,7 @@ export function CreateBillModal({
           <div className="relative">
             <Input
               icon={<UserIcon className="size-4" />}
-              placeholder="Search by name or customer code..."
+              placeholder="Search by name or account number..."
               value={search}
               onFocus={() => setOpen(true)}
               onChange={(e) => {
@@ -121,7 +122,7 @@ export function CreateBillModal({
               <div className="absolute z-20 mt-1.5 w-full overflow-hidden rounded-xl border border-line bg-surface-raised shadow-xl">
                 {filtered.map((c) => (
                   <button
-                    key={c.id}
+                    key={c.accountId}
                     type="button"
                     onClick={() => pickCustomer(c)}
                     className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-sm text-text-primary hover:bg-surface"

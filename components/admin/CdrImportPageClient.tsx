@@ -24,12 +24,16 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
   const [preview, setPreview] = useState<RetailCdrPreview | null>(null);
   const [identifierColumn, setIdentifierColumn] = useState("");
   const [wholesaleColumn, setWholesaleColumn] = useState("");
+  const [customerCodeColumn, setCustomerCodeColumn] = useState("");
+  const [recordTypeColumn, setRecordTypeColumn] = useState("");
 
   function reset() {
     setSelectedFile(null);
     setPreview(null);
     setIdentifierColumn("");
     setWholesaleColumn("");
+    setCustomerCodeColumn("");
+    setRecordTypeColumn("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -53,6 +57,8 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
       setPreview(data);
       setIdentifierColumn(data.detection.identifierColumn ?? "");
       setWholesaleColumn(data.detection.wholesaleColumn ?? "");
+      setCustomerCodeColumn(data.detection.customerCodeColumn ?? "");
+      setRecordTypeColumn(data.detection.recordTypeColumn ?? "");
       if (data.invalidRows > 0) {
         toast.warning(`${data.invalidRows} of ${data.totalRows} rows failed validation — check the preview below.`);
       }
@@ -75,15 +81,19 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
       formData.append("mode", "commit");
       formData.append("identifierColumn", identifierColumn);
       formData.append("wholesaleColumn", wholesaleColumn);
+      formData.append("customerCodeColumn", customerCodeColumn);
+      formData.append("recordTypeColumn", recordTypeColumn);
       const res = await fetch("/api/admin/cdr-import/upload", { method: "POST", body: formData });
       const json = await res.json();
       if (!json.success) {
-        toast.error(json.error ?? "Import failed.");
+        toast.error(json.error ?? json.data?.errorLog?.at(-1) ?? "Import failed.");
         if (json.data?.batchId) router.push(`/admin/billing/cdr-import/${json.data.batchId}`);
         return;
       }
       const data = json.data as RetailCdrImportResult;
-      toast.success(`Processed ${data.totalRows} rows — ${data.matchedRows} matched, ${data.unmatchedRows} unmatched.`);
+      const summary = `Upload completed — ${data.totalRows} records: ${data.matchedRows} allocated, ${data.unmatchedRows} unallocated${data.duplicateRows ? `, ${data.duplicateRows} duplicates skipped` : ""}.`;
+      if (data.unmatchedRows > 0) toast.warning(summary);
+      else toast.success(summary);
       router.push(`/admin/billing/cdr-import/${data.batchId}`);
     } catch {
       toast.error("Something went wrong importing the file.");
@@ -97,7 +107,9 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
       <div>
         <p className="text-2xl font-bold text-text-primary">CDR Import</p>
         <p className="text-sm">
-          Upload a wholesale CDR CSV to price it against your Retail Plans and prepare invoice-ready charges.
+          Upload a wholesale CDR CSV (single-customer or bulk). Each record is allocated by Customer Code → Customer
+          Account and Product Code → Product, then priced with the product&apos;s Retail Plan. Unallocated records are
+          reported — no customers or accounts are created automatically.
         </p>
       </div>
 
@@ -167,7 +179,44 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                 <p className="text-xs text-text-muted">Invalid</p>
                 <p className="text-lg font-bold text-red">{formatNumber(preview.invalidRows)}</p>
               </div>
+              <div>
+                <p className="text-xs text-text-muted">Would allocate</p>
+                <p className="text-lg font-bold text-accent-green">{formatNumber(preview.allocationPreview.allocated)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-muted">Would be unallocated</p>
+                <p className="text-lg font-bold text-amber">{formatNumber(preview.allocationPreview.unallocated)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-muted">Customer codes</p>
+                <p className="text-lg font-bold text-text-primary">
+                  {formatNumber(preview.distinctCustomerCodes)}
+                  <span className="ml-1 text-xs font-normal text-text-muted">
+                    {preview.distinctCustomerCodes > 1 ? "(bulk file)" : preview.distinctCustomerCodes === 1 ? "(single customer)" : ""}
+                  </span>
+                </p>
+              </div>
             </div>
+
+            {(preview.allocationPreview.unknownCustomerCodes.length > 0 || preview.allocationPreview.unknownProductCodes.length > 0) && (
+              <div className="space-y-1 rounded-xl border border-amber/30 bg-amber/10 px-3.5 py-2.5 text-xs text-amber">
+                {preview.allocationPreview.unknownCustomerCodes.length > 0 && (
+                  <p>
+                    Unknown Customer Codes (no Customer Account):{" "}
+                    <span className="font-mono">{preview.allocationPreview.unknownCustomerCodes.slice(0, 15).join(", ")}</span>
+                    {preview.allocationPreview.unknownCustomerCodes.length > 15 && " …"}
+                  </p>
+                )}
+                {preview.allocationPreview.unknownProductCodes.length > 0 && (
+                  <p>
+                    Unknown Product Codes:{" "}
+                    <span className="font-mono">{preview.allocationPreview.unknownProductCodes.slice(0, 15).join(", ")}</span>
+                    {preview.allocationPreview.unknownProductCodes.length > 15 && " …"}
+                  </p>
+                )}
+                <p className="text-text-muted">These records will be stored as unallocated and listed in the Unallocated Report.</p>
+              </div>
+            )}
 
             {preview.duplicateOfBatch && (
               <div className="flex items-start gap-2 rounded-xl border border-amber/30 bg-amber/10 px-3.5 py-2.5 text-xs text-amber">
@@ -177,15 +226,26 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                   <Link href={`/admin/billing/cdr-import/${preview.duplicateOfBatch.id}`} className="underline">
                     {preview.duplicateOfBatch.fileName}
                   </Link>{" "}
-                  imported {formatDateTime(preview.duplicateOfBatch.createdAt)}. Importing again will create duplicate
-                  charge records unless the file has genuinely new rows.
+                  imported {formatDateTime(preview.duplicateOfBatch.createdAt)}. Records already processed will be
+                  detected and skipped as duplicates — only genuinely new rows are charged.
                 </span>
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <p className="mb-1.5 text-xs font-medium text-text-secondary">Identifier column</p>
+                <p className="mb-1.5 text-xs font-medium text-text-secondary">Customer Code (account) column</p>
+                <Select value={customerCodeColumn} onChange={(e) => setCustomerCodeColumn(e.target.value)}>
+                  <option value="">-- none detected --</option>
+                  {preview.headers.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-text-secondary">Product Code column</p>
                 <Select value={identifierColumn} onChange={(e) => setIdentifierColumn(e.target.value)}>
                   <option value="">-- none detected --</option>
                   {preview.headers.map((h) => (
@@ -206,6 +266,17 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                   ))}
                 </Select>
               </div>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-text-secondary">Record type column (optional)</p>
+                <Select value={recordTypeColumn} onChange={(e) => setRecordTypeColumn(e.target.value)}>
+                  <option value="">-- none --</option>
+                  {preview.headers.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
 
             <div>
@@ -215,7 +286,9 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                   <THead>
                     <TR>
                       <TH>Row</TH>
-                      <TH>Identifier</TH>
+                      <TH>Customer Code</TH>
+                      <TH>Product Code</TH>
+                      <TH>Type</TH>
                       <TH>Wholesale</TH>
                       <TH>Status</TH>
                     </TR>
@@ -224,7 +297,9 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                     {preview.sampleRows.map((r) => (
                       <TR key={r.rowNumber}>
                         <TD className="text-text-muted">{r.rowNumber}</TD>
+                        <TD className="font-mono text-xs">{r.customerCode || "--"}</TD>
                         <TD className="font-mono text-xs">{r.identifier || "--"}</TD>
+                        <TD className="text-xs">{r.recordType || "--"}</TD>
                         <TD>{r.wholesaleAmount === null ? r.wholesaleAmountRaw || "--" : r.wholesaleAmount}</TD>
                         <TD>
                           {r.isValid ? (
@@ -256,7 +331,7 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
       )}
 
       <div>
-        <p className="mb-3 text-sm font-semibold text-text-primary">Import History</p>
+        <p className="mb-3 text-sm font-semibold text-text-primary">Upload History</p>
         {batches.length === 0 ? (
           <EmptyState icon={FileSpreadsheet} title="No CDR files imported yet" />
         ) : (
@@ -266,10 +341,10 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                 <TR>
                   <TH>File</TH>
                   <TH>Uploaded By</TH>
-                  <TH>Rows</TH>
-                  <TH>Matched</TH>
-                  <TH>Unmatched</TH>
-                  <TH>Invalid</TH>
+                  <TH>Records</TH>
+                  <TH>Allocated</TH>
+                  <TH>Unallocated</TH>
+                  <TH>Duplicate / Invalid</TH>
                   <TH>Wholesale</TH>
                   <TH>Retail</TH>
                   <TH>Status</TH>
@@ -280,7 +355,10 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
               <TBody>
                 {batches.map((b) => (
                   <TR key={b.id}>
-                    <TD className="font-medium text-text-primary">{b.fileName}</TD>
+                    <TD className="font-medium text-text-primary">
+                      {b.fileName}
+                      <span className="block font-mono text-[10px] text-text-muted">{b.id}</span>
+                    </TD>
                     <TD className="text-text-secondary">{b.uploadedByName}</TD>
                     <TD>{formatNumber(b.totalRows)}</TD>
                     <TD className="text-accent-green">{formatNumber(b.matchedRows)}</TD>
@@ -288,7 +366,7 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                       {formatNumber(b.unmatchedRows)}
                     </TD>
                     <TD className={b.invalidRows > 0 ? "text-red" : "text-text-secondary"}>
-                      {formatNumber(b.invalidRows)}
+                      {formatNumber(b.duplicateRows)} / {formatNumber(b.invalidRows)}
                     </TD>
                     <TD>{formatCurrency(b.totalWholesaleAmount, b.currency)}</TD>
                     <TD>{formatCurrency(b.totalRetailAmount, b.currency)}</TD>
@@ -296,6 +374,11 @@ export function CdrImportPageClient({ batches }: { batches: CdrImportBatchRow[] 
                       <Badge tone={b.status === "COMPLETED" ? "green" : b.status === "FAILED" ? "red" : "amber"}>
                         {b.status}
                       </Badge>
+                      {b.status === "FAILED" && b.errorLog.length > 0 && (
+                        <span className="mt-1 block max-w-[220px] truncate text-[11px] text-red" title={b.errorLog.join("\n")}>
+                          {b.errorLog[b.errorLog.length - 1]}
+                        </span>
+                      )}
                     </TD>
                     <TD className="text-text-secondary">{formatDateTime(b.createdAt)}</TD>
                     <TD>

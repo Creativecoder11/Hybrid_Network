@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireRole } from "@/lib/auth/dal";
+import { getPortalContext } from "@/lib/accounts/access";
 import { PortalReportsClient } from "@/components/portal/PortalReportsClient";
 
 export const metadata: Metadata = {
@@ -7,6 +7,6 @@ export const metadata: Metadata = {
 };
 
 export default async function PortalReportsPage() {
-  await requireRole(["CUSTOMER"], "/admin");
-  return <PortalReportsClient />;
+  const ctx = await getPortalContext();
+  return <PortalReportsClient accountNumber={ctx.account?.accountNumber ?? null} locationEnabled={ctx.features.deviceLocation} />;
 }

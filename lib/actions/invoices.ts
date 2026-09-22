@@ -11,6 +11,7 @@ import { UsageRecord } from "@/models/UsageRecord";
 import { Settings } from "@/models/Settings";
 import { ActivityLog } from "@/models/ActivityLog";
 import { CdrChargeRecord } from "@/models/CdrChargeRecord";
+import { CustomerAccount } from "@/models/CustomerAccount";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateInvoiceNumber } from "@/lib/utils/ids";
 import { computeInvoiceLineItems } from "@/lib/billing/calc";
@@ -49,6 +50,7 @@ export async function createInvoiceAction(
 
   const parsed = createInvoiceSchema.safeParse({
     customerId: str(formData, "customerId"),
+    customerAccountId: str(formData, "customerAccountId") || null,
     subscriptionId: str(formData, "subscriptionId") || null,
     periodMonth: str(formData, "periodMonth"),
     dueDate: str(formData, "dueDate"),
@@ -64,19 +66,31 @@ export async function createInvoiceAction(
 
   await connectDB();
 
-  const customer = await User.findOne({ _id: parsed.data.customerId, role: "CUSTOMER" });
+  const customer = await User.findOne({ _id: parsed.data.customerId, role: "CUSTOMER", customerProfile: null });
   if (!customer) return { error: "Customer not found." };
 
+  // Every bill belongs to exactly one Customer Account. A customer with a
+  // single account doesn't need to pick one.
+  const accounts = await CustomerAccount.find({ customer: customer._id }).select("accountNumber").lean();
+  const account = parsed.data.customerAccountId
+    ? accounts.find((a) => a._id.toString() === parsed.data.customerAccountId)
+    : accounts.length === 1
+      ? accounts[0]
+      : undefined;
+  if (!account) {
+    return { error: accounts.length === 0 ? "This customer has no Customer Account to bill." : "Choose which Customer Account to bill." };
+  }
+
   const subscription = await Subscription.findOne({
-    customer: customer._id,
+    customerAccount: account._id,
     status: "ACTIVE",
   }).sort({ createdAt: -1 });
-  if (!subscription) return { error: "This customer has no active subscription to bill." };
+  if (!subscription) return { error: `Account ${account.accountNumber} has no active subscription to bill.` };
 
   const plan = await ServicePlan.findById(subscription.plan);
-  if (!plan) return { error: "The customer's plan could not be found." };
+  if (!plan) return { error: "The account's plan could not be found." };
 
-  const usage = await UsageRecord.findOne({ customer: customer._id, periodMonth: parsed.data.periodMonth });
+  const usage = await UsageRecord.findOne({ customerAccount: account._id, periodMonth: parsed.data.periodMonth });
 
   const { lineItems, subtotal } =
     parsed.data.amount !== undefined
@@ -115,6 +129,8 @@ export async function createInvoiceAction(
   const invoice = await Invoice.create({
     invoiceNumber,
     customer: customer._id,
+    customerAccount: account._id,
+    accountNumber: account.accountNumber,
     subscription: subscription._id,
     periodMonth: parsed.data.periodMonth,
     issueDate: new Date(),
@@ -135,8 +151,9 @@ export async function createInvoiceAction(
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: customer._id,
+    targetAccount: account._id,
     action: "INVOICE_CREATED",
-    meta: { invoiceNumber, periodMonth: parsed.data.periodMonth, total },
+    meta: { invoiceNumber, periodMonth: parsed.data.periodMonth, total, accountNumber: account.accountNumber },
   });
 
   revalidatePath("/admin/billing");
@@ -185,6 +202,7 @@ export async function sendInvoiceAction(invoiceId: string): Promise<ActionState>
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: customer._id,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_SENT",
     meta: { invoiceNumber: invoice.invoiceNumber },
   });
@@ -222,6 +240,7 @@ export async function markPaidAction(
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: invoice.customer,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_PAID",
     meta: { invoiceNumber: invoice.invoiceNumber, paymentMethod: parsed.data.paymentMethod },
   });
@@ -288,6 +307,7 @@ export async function updateInvoiceAction(
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: invoice.customer,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_UPDATED",
     meta: { invoiceNumber: invoice.invoiceNumber, total },
   });
@@ -311,6 +331,7 @@ export async function deleteInvoiceAction(invoiceId: string): Promise<ActionStat
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: invoice.customer,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_DELETED",
     meta: { invoiceNumber: invoice.invoiceNumber },
   });
@@ -333,6 +354,7 @@ export async function restoreInvoiceAction(invoiceId: string): Promise<ActionSta
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: invoice.customer,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_RESTORED",
     meta: { invoiceNumber: invoice.invoiceNumber },
   });
@@ -354,6 +376,7 @@ export async function purgeInvoiceAction(invoiceId: string): Promise<ActionState
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: invoice.customer,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_PURGED",
     meta: { invoiceNumber: invoice.invoiceNumber },
   });
@@ -377,6 +400,7 @@ export async function cancelInvoiceAction(invoiceId: string): Promise<ActionStat
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: invoice.customer,
+    targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_CANCELLED",
     meta: { invoiceNumber: invoice.invoiceNumber },
   });
@@ -481,29 +505,34 @@ export async function generateInvoicesFromChargesAction(
     };
   }
 
-  const byCustomer = new Map<string, typeof records>();
+  // One invoice per Customer Account (a customer with several accounts gets
+  // one bill per account, never a mixed bill).
+  const byAccount = new Map<string, typeof records>();
   let skippedNoCustomer = 0;
   for (const r of records) {
-    if (!r.customer) {
+    if (!r.customer || !r.customerAccount) {
       skippedNoCustomer++;
       continue;
     }
-    const key = r.customer.toString();
-    const list = byCustomer.get(key) ?? [];
+    const key = r.customerAccount.toString();
+    const list = byAccount.get(key) ?? [];
     list.push(r);
-    byCustomer.set(key, list);
+    byAccount.set(key, list);
   }
-  if (byCustomer.size === 0) {
-    return { error: "None of the selected records have a matched customer yet. Assign a customer first." };
+  if (byAccount.size === 0) {
+    return { error: "None of the selected records are allocated to a Customer Account yet." };
   }
 
   const settings = await Settings.findOne({ key: "GLOBAL" });
   const taxRate = settings?.taxRate ?? 0;
 
   let created = 0;
-  for (const [customerId, group] of byCustomer) {
-    const customer = await User.findById(customerId);
-    if (!customer) continue;
+  for (const [accountId, group] of byAccount) {
+    const [customer, account] = await Promise.all([
+      User.findById(group[0].customer),
+      CustomerAccount.findById(accountId).select("accountNumber").lean(),
+    ]);
+    if (!customer || !account) continue;
 
     const lineItems = group.map((r) => ({
       description: r.description || `CDR Charge — ${r.identifier}`,
@@ -528,6 +557,8 @@ export async function generateInvoicesFromChargesAction(
     const invoice = await Invoice.create({
       invoiceNumber,
       customer: customer._id,
+      customerAccount: account._id,
+      accountNumber: account.accountNumber,
       periodMonth,
       issueDate: new Date(),
       dueDate: new Date(dueDate),
@@ -550,8 +581,9 @@ export async function generateInvoicesFromChargesAction(
     await ActivityLog.create({
       actor: admin.id,
       targetCustomer: customer._id,
+      targetAccount: account._id,
       action: "CDR_CHARGES_INVOICED",
-      meta: { invoiceNumber, chargeCount: group.length, total },
+      meta: { invoiceNumber, chargeCount: group.length, total, accountNumber: account.accountNumber },
     });
 
     created++;
@@ -562,6 +594,6 @@ export async function generateInvoicesFromChargesAction(
 
   if (created === 0) return { error: "No invoices could be created." };
   const skippedNote =
-    skippedNoCustomer > 0 ? ` ${skippedNoCustomer} record(s) skipped (no matched customer).` : "";
+    skippedNoCustomer > 0 ? ` ${skippedNoCustomer} record(s) skipped (not allocated to a Customer Account).` : "";
   return { success: `Created ${created} invoice${created === 1 ? "" : "s"}.${skippedNote}` };
 }
