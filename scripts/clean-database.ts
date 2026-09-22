@@ -95,23 +95,42 @@ async function cleanDatabase() {
       mustChangePassword: false,
       customerId: "HN-CUST-1001",
       customerCode: "ZZSP100",
-      customerCodes: ["ZZSP100", "ACC-2001"],
-      companyName: "Hybrid Networks Client Portal",
+      company: "Hybrid Networks Client Portal",
       starlinkVesselId: "STARLINK-V01",
       loginAttempts: 0,
     }),
   ]);
 
+  // Create linked CustomerAccounts for multi-account support
+  await Promise.all([
+    CustomerAccount.create({
+      customer: mainCustomer._id,
+      accountNumber: "ZZSP100",
+      accountNumberNormalized: "ZZSP100",
+      name: "Primary Vessel - Pacific Star",
+      status: "ACTIVE",
+      starlinkVesselIds: ["STARLINK-V01"],
+    }),
+    CustomerAccount.create({
+      customer: mainCustomer._id,
+      accountNumber: "ACC-2001",
+      accountNumberNormalized: "ACC-2001",
+      name: "Secondary Vessel - Atlantic Explorer",
+      status: "ACTIVE",
+    }),
+  ]);
+
   console.log(`✔ Super Admin: ${superAdmin.email} (Password: Admin@12345)`);
   console.log(`✔ Sub Admin: ${subAdmin.email} (Password: Staff@12345)`);
-  console.log(`✔ Customer: ${mainCustomer.email} (Codes: ZZSP100, ACC-2001 | Password: Client@12345)`);
+  console.log(`✔ Customer: ${mainCustomer.email} (Accounts: ZZSP100, ACC-2001 | Password: Client@12345)`);
 
   // 3. Reset Global Settings
   console.log("\n--- Initializing Global Settings ---");
   await Settings.deleteMany({});
   await Settings.create({
     key: "GLOBAL",
-    companyName: "Hybrid Networks Pty Ltd",
+    companyName: "Hybrid Networks",
+    companyLegalName: "Hybrid Networks Pty Ltd",
     companyEmail: "billing@hybridnetworks.com",
     companyPhone: "+61 2 9000 1000",
     companyAddress: "Level 12, 100 Barangaroo Avenue, Sydney NSW 2000, Australia",
@@ -121,9 +140,7 @@ async function cleanDatabase() {
     taxRate: 10,
     invoicePrefix: "HINV",
     invoiceNextNumber: 1001,
-    ticketPrefix: "TCK",
-    ticketNextNumber: 1001,
-    invoicePaymentInstructions:
+    paymentInstructions:
       "Direct Bank Transfer:\nBank: Westpac Banking Corporation\nBSB: 032-000\nAccount Number: 12345678\nAccount Name: Hybrid Networks Pty Ltd\nReference: Please quote your Invoice Number",
   });
   console.log("✔ Global Settings initialized (HINV-1001, GST 10%, AUD).");
@@ -263,4 +280,3 @@ cleanDatabase().catch((err) => {
   console.error("❌ Error cleaning database:", err);
   process.exit(1);
 });
-
