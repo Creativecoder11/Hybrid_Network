@@ -70,7 +70,12 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
       <Card>
         <CardContent className="pt-5">
           <div
-            className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-line p-10 text-center transition-colors hover:border-accent-green/40"
+            className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-line p-10 text-center transition-colors hover:border-accent-green/40"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).tagName !== "INPUT" && (e.target as HTMLElement).tagName !== "LABEL") {
+                fileInputRef.current?.click();
+              }
+            }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
@@ -98,6 +103,7 @@ export function CdrUploadPageClient({ batches }: { batches: CdrBatchRow[] }) {
             <label
               htmlFor="cdr-file-input"
               className="cursor-pointer rounded-xl border border-line px-4 py-2 text-xs font-medium text-text-secondary hover:bg-surface-raised"
+              onClick={(e) => e.stopPropagation()}
             >
               Browse Files
             </label>

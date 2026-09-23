@@ -18,12 +18,16 @@ export default async function RetailPlansPage() {
     RetailPlan.find().sort({ createdAt: -1 }).lean(),
     getCurrentUser(),
     CdrIdentifierMapping.aggregate([
-      { $match: { isActive: true } },
+      { $match: { isActive: true, retailPlan: { $ne: null } } },
       { $group: { _id: "$retailPlan", count: { $sum: 1 } } },
     ]),
   ]);
 
-  const countByPlan = new Map(mappingCounts.map((m) => [m._id.toString(), m.count as number]));
+  const countByPlan = new Map(
+    mappingCounts
+      .filter((m) => m._id)
+      .map((m) => [m._id.toString(), Number(m.count) || 0])
+  );
 
   const rows: RetailPlanRow[] = plans.map((p) => ({
     id: p._id.toString(),
@@ -35,8 +39,8 @@ export default async function RetailPlansPage() {
     currency: p.currency ?? "USD",
     isActive: p.isActive,
     mappedIdentifierCount: countByPlan.get(p._id.toString()) ?? 0,
-    createdAt: (p.createdAt as Date).toISOString(),
-    updatedAt: (p.updatedAt as Date).toISOString(),
+    createdAt: p.createdAt ? (p.createdAt as Date).toISOString() : new Date().toISOString(),
+    updatedAt: p.updatedAt ? (p.updatedAt as Date).toISOString() : new Date().toISOString(),
   }));
 
   return (
