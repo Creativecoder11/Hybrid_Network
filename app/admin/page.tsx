@@ -51,7 +51,6 @@ export default async function AdminDashboardPage() {
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-text-muted">Admin Dashboard</p>
         <p className="mt-1 text-2xl font-bold">
-          Welcome back, <span className="text-accent-green">{user.name.split(" ")[0]}</span>
           Welcome back, <span className="text-accent-green">{(user?.name || "").trim().split(/\s+/)[0] || "Admin"}</span>
         </p>
         <p className="mt-1 text-sm ">

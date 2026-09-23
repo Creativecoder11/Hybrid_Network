@@ -1,7 +1,5 @@
 import { cn } from "@/lib/utils/cn";
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
 function initials(name?: string | null): string {
   const parts = (name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -15,7 +13,6 @@ export function Avatar({
   size = "md",
   className,
 }: {
-  name: string;
   name?: string | null;
   src?: string | null;
   size?: "sm" | "md" | "lg";
@@ -32,7 +29,6 @@ export function Avatar({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
-        alt={name}
         alt={name ?? "Avatar"}
         className={cn("rounded-full object-cover", sizeClasses[size], className)}
       />

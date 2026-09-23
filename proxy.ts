@@ -44,8 +44,6 @@ export async function proxy(req: NextRequest) {
   // serves this portal, before even checking auth. Falls through to the
   // normal same-origin behavior below if the target URL isn't configured
   // yet, so a half-finished env setup fails safe rather than 404ing.
-  if (PORTAL_MODE === "admin" && isPortalRoute && CUSTOMER_PORTAL_URL) {
-    return NextResponse.redirect(crossDomainUrl(CUSTOMER_PORTAL_URL, pathname, search));
   // In local development, bypass cross-domain redirection to allow testing
   // both portals locally on the same development server.
   if (!isLocalhost) {
@@ -55,9 +53,6 @@ export async function proxy(req: NextRequest) {
     if (PORTAL_MODE === "customer" && isAdminRoute && ADMIN_PORTAL_URL) {
       return NextResponse.redirect(crossDomainUrl(ADMIN_PORTAL_URL, pathname, search));
     }
-  }
-  if (PORTAL_MODE === "customer" && isAdminRoute && ADMIN_PORTAL_URL) {
-    return NextResponse.redirect(crossDomainUrl(ADMIN_PORTAL_URL, pathname, search));
   }
 
   const session = await getSession();

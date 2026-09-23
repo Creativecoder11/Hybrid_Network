@@ -138,7 +138,6 @@ export function OverviewClient({
   const searchParams = useSearchParams();
   const [payOpen, setPayOpen] = useState(false);
   const dueInDays = payment ? daysUntil(payment.dueDate) : null;
-  const firstName = customerName.split(" ")[0];
   const firstName = (customerName || "").trim().split(/\s+/)[0] || "Customer";
 
   function updatePeriod(value: string) {
@@ -150,11 +149,8 @@ export function OverviewClient({
 
   const periodInputValue = periodMonth ? `${periodMonth.slice(0, 4)}-${periodMonth.slice(4, 6)}` : "";
   const maxMbps = plan?.speedMbps ?? 0;
-  const avgMbps = terminalSummary.avgThroughputMbps;
   const avgMbps = terminalSummary?.avgThroughputMbps ?? null;
   const speedPct = maxMbps > 0 && avgMbps !== null ? Math.min(100, (avgMbps / maxMbps) * 100) : 0;
-  const offlineCount = terminalSummary.terminals.filter((t) => t.onlineStatus === "OFFLINE").length;
-  const unknownCount = terminalSummary.terminals.filter((t) => t.onlineStatus === "UNKNOWN").length;
   const terminals = terminalSummary?.terminals ?? [];
   const offlineCount = terminals.filter((t) => t.onlineStatus === "OFFLINE").length;
   const unknownCount = terminals.filter((t) => t.onlineStatus === "UNKNOWN").length;
@@ -271,15 +267,17 @@ export function OverviewClient({
                     key={t.id}
                     href={`/portal/devices/${encodeURIComponent(t.id)}`}
                     title={t.statusReason}
-                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-surface-raised"
+                    className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 hover:bg-surface-raised transition-colors"
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm text-text-primary">{t.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-sm font-medium text-text-primary">{t.name}</span>
+                        <TerminalStatusDot status={t.onlineStatus} />
+                      </div>
                       <span className="block truncate text-[11px] text-text-muted">
                         {t.lastSeenAt ? `Last seen ${formatDateTime(t.lastSeenAt)}` : t.statusReason}
                       </span>
                     </span>
-                    <TerminalStatusDot status={t.onlineStatus} />
                   </Link>
                 ))}
               </div>

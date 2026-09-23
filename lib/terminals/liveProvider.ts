@@ -155,9 +155,15 @@ async function loadSources(vesselIds: string[], opts: { detail: boolean; allVess
     historyPromise,
   ]);
 
+  const telemetryMap = new Map<string, SlashVesselLatestTelemetry>();
+  for (const t of telemetryResult.rows) {
+    if (t.deviceId) telemetryMap.set(t.deviceId, t);
+    if (t.vesselId && !telemetryMap.has(t.vesselId)) telemetryMap.set(t.vesselId, t);
+  }
+
   return {
     vessels,
-    telemetry: new Map(telemetryResult.rows.map((t) => [t.deviceId, t])),
+    telemetry: telemetryMap,
     telemetryFailed: telemetryResult.failed,
     usage,
     locations,
@@ -224,7 +230,11 @@ function buildRecord(
   terminal: SlashVessel["userTerminals"][number],
   sources: Sources
 ): TerminalRecord {
-  const telemetry = sources.telemetry.get(terminal.userTerminalId);
+  const telemetry =
+    sources.telemetry.get(terminal.userTerminalId) ??
+    (terminal.dishSerialNumber ? sources.telemetry.get(terminal.dishSerialNumber) : undefined) ??
+    (terminal.kitSerialNumber ? sources.telemetry.get(terminal.kitSerialNumber) : undefined) ??
+    sources.telemetry.get(vessel.vesselId);
   const telemetryAvailable = !sources.telemetryFailed.has("*") && !sources.telemetryFailed.has(vessel.vesselId);
   const dataUsage = sources.usage.get(vessel.vesselId) ?? null;
   const servicePlan = sources.plans.get(vessel.vesselId) ?? null;
