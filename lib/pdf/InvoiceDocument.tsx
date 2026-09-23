@@ -142,6 +142,14 @@ const STATUS_COLORS: Record<string, string> = {
 
 function money(amount: number, currency: string) {
   return `${currency} ${amount.toFixed(2)}`;
+  const value = amount ?? 0;
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value).toFixed(2);
+  const c = (currency || "").trim().toUpperCase();
+  if (c === "AUD" || c === "USD" || c === "CAD" || c === "NZD" || c === "$" || c === "A$" || !c) {
+    return `${sign}$${abs}`;
+  }
+  return `${currency} ${abs}`;
 }
 
 function formatPeriodLabel(periodMonth: string) {

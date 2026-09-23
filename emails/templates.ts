@@ -48,7 +48,7 @@ export function invoiceEmailHtml(params: {
   invoiceNumber: string;
   amount: string;
   dueDate: string;
-  portalUrl: string;
+  portalUrl?: string;
 }) {
   return emailLayout(`
     <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Invoice ${params.invoiceNumber}</p>
@@ -57,7 +57,6 @@ export function invoiceEmailHtml(params: {
       Your invoice <strong>${params.invoiceNumber}</strong> for <strong>${params.amount}</strong>
       is now available. Payment is due by <strong>${params.dueDate}</strong>.
     </p>
-    ${emailButton("View Invoice", params.portalUrl)}
     <p style="margin:16px 0 0;color:#9CA3AF;font-size:13px;">
       A PDF copy of this invoice is attached to this email.
     </p>
@@ -69,7 +68,7 @@ export function invoiceReminderEmailHtml(params: {
   invoiceNumber: string;
   amount: string;
   dueDate: string;
-  portalUrl: string;
+  portalUrl?: string;
 }) {
   return emailLayout(`
     <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">Payment reminder: ${params.invoiceNumber}</p>
@@ -78,7 +77,6 @@ export function invoiceReminderEmailHtml(params: {
       This is a friendly reminder that invoice <strong>${params.invoiceNumber}</strong> for
       <strong>${params.amount}</strong> was due on <strong>${params.dueDate}</strong> and remains unpaid.
     </p>
-    ${emailButton("View & Pay Invoice", params.portalUrl)}
   `);
 }
 

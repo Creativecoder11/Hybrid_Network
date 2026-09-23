@@ -8,7 +8,6 @@ import { getCurrentUser } from "@/lib/auth/dal";
 import { syncOverdueStatuses } from "@/lib/billing/statusSync";
 import { getBillingStats, buildPlanSpecLabel } from "@/lib/billing/billingStats";
 import { BillingPageClient } from "@/components/admin/BillingPageClient";
-import { BillingSubNav } from "@/components/admin/BillingSubNav";
 import type { BillableCustomerOption, InvoiceListRow, TrashedInvoiceRow } from "@/lib/types/billing";
 
 const GB = 1_000_000_000;
@@ -175,7 +174,6 @@ export default async function BillingPage({
 
   return (
     <div className="space-y-6">
-      <BillingSubNav />
       <BillingPageClient
         rows={rows}
         status={status}

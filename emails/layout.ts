@@ -8,7 +8,18 @@ export function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
+function getLogoUrl(): string {
+  const base = (
+    process.env.CUSTOMER_PORTAL_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://login.hybridnetworks.net.au"
+  ).replace(/\/+$/, "");
+  const domainRoot = base.replace(/\/login$/, "");
+  return `${domainRoot}/hybrid-logo.png`;
+}
+
 export function emailLayout(bodyHtml: string): string {
+  const logoUrl = getLogoUrl();
   return `<!DOCTYPE html>
 <html>
   <body style="margin:0;padding:0;background-color:#0B0F14;font-family:Arial,Helvetica,sans-serif;">
@@ -17,8 +28,8 @@ export function emailLayout(bodyHtml: string): string {
         <td align="center">
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#161B22;border:1px solid #232A33;border-radius:16px;overflow:hidden;">
             <tr>
-              <td style="padding:28px 32px;border-bottom:1px solid #232A33;">
-                <span style="color:#4ADE80;font-size:20px;font-weight:800;letter-spacing:0.5px;">HYBRID NETWORKS</span>
+              <td style="padding:24px 32px;border-bottom:1px solid #232A33;">
+                <img src="https://i.ibb.co.com/HfNsrH0Z/hybrid-logo.png" alt="HYBRID NETWORKS" width="170" style="display:block;max-width:170px;height:auto;border:0;outline:none;color:#4ADE80;font-size:18px;font-weight:800;letter-spacing:0.5px;" />
               </td>
             </tr>
             <tr>

@@ -6,8 +6,10 @@ import { connectDB } from "@/lib/db/connect";
 import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
 import { CustomerAccount, normalizeAccountNumber } from "@/models/CustomerAccount";
 import { Subscription } from "@/models/Subscription";
+import { ServicePlan } from "@/models/ServicePlan";
 import { UsageRecord } from "@/models/UsageRecord";
 import { Invoice } from "@/models/Invoice";
+import { CdrRecord } from "@/models/CdrRecord";
 import { ActivityLog } from "@/models/ActivityLog";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateCustomerId } from "@/lib/utils/ids";
@@ -16,7 +18,21 @@ import { parseList } from "@/lib/validations/account";
 import { validateVesselIds } from "@/lib/accounts/vessels";
 import { createCustomerSchema, updateCustomerSchema, manualUsageSchema } from "@/lib/validations/customer";
 
-export type ActionState = { error?: string; success?: string } | undefined;
+export type ActionState =
+  | {
+      error?: string;
+      success?: string;
+      customerCreated?: {
+        id: string;
+        customerId: string;
+        name: string;
+        email: string;
+        accountNumbers: string[];
+        emailDelivered: boolean;
+        error?: string;
+      };
+    }
+  | undefined;
 
 // Customer Profiles. A profile (User, role CUSTOMER, no customerProfile link)
 // holds the company details and is also the primary portal login. Its
@@ -57,7 +73,7 @@ function profileFields(formData: FormData) {
     phone: str(formData, "phone"),
     address: str(formData, "address"),
     company: str(formData, "company"),
-    accountType: str(formData, "accountType") || null,
+    accountType: str(formData, "accountType") || undefined,
     contactPerson: str(formData, "contactPerson"),
     nidTradeLicense: str(formData, "nidTradeLicense"),
     cardName: str(formData, "cardName"),
@@ -80,7 +96,7 @@ export async function createCustomerAction(
     ...profileFields(formData),
     accountNumbers: parseList(str(formData, "accountNumbers")),
     starlinkVesselId: str(formData, "starlinkVesselId"),
-    planId: str(formData, "planId") || null,
+    planId: str(formData, "planId"),
     staticIp: str(formData, "staticIp"),
   });
   if (!parsed.success) {
@@ -175,12 +191,32 @@ export async function createCustomerAction(
 
   revalidatePath("/admin/customers");
   if (!invite.success) {
-    return { success: `Customer created, but the invitation could not be sent (${invite.error}). Use "Re-send invitation".` };
+    return {
+      success: `Customer created, but the invitation could not be sent (${invite.error}). Use "Re-send invitation".`,
+      customerCreated: {
+        id: customer._id.toString(),
+        customerId: customer.customerId || "",
+        name: data.name,
+        email: data.email,
+        accountNumbers: data.accountNumbers,
+        emailDelivered: false,
+        error: invite.error,
+      },
+    };
   }
   return {
     success: invite.delivered
       ? `Customer created. Invitation with a temporary password sent to ${data.email}.`
       : "Customer created. SMTP isn't configured, so the invitation email was not delivered — configure SMTP and re-send the invitation.",
+    customerCreated: {
+      id: customer._id.toString(),
+      customerId: customer.customerId || "",
+      name: data.name,
+      email: data.email,
+      accountNumbers: data.accountNumbers,
+      emailDelivered: Boolean(invite.delivered),
+      error: invite.error,
+    },
   };
 }
 
@@ -194,46 +230,79 @@ export async function updateCustomerAction(
   const id = str(formData, "id");
   if (!mongoose.isValidObjectId(id)) return { error: "Missing customer id." };
 
+  const rawAccountNumbers = parseList(str(formData, "accountNumbers"));
+  const starlinkVesselId = str(formData, "starlinkVesselId");
+  const planId = str(formData, "planId");
+  const staticIp = str(formData, "staticIp");
+
   const parsed = updateCustomerSchema.safeParse({
     id,
     ...profileFields(formData),
     status: (str(formData, "status") || undefined) as "ACTIVE" | "SUSPENDED" | "INVITED" | undefined,
+    accountNumbers: rawAccountNumbers,
+    starlinkVesselId,
+    planId,
+    staticIp,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
   }
+  const data = parsed.data;
 
   await connectDB();
   const customer = await User.findOne({ _id: id, ...CUSTOMER_PROFILE_FILTER });
   if (!customer) return { error: "Customer not found." };
 
-  if (parsed.data.email && parsed.data.email.toLowerCase() !== customer.email) {
-    const emailTaken = await User.exists({ email: parsed.data.email.toLowerCase(), _id: { $ne: id } });
+  if (data.email && data.email.toLowerCase() !== customer.email) {
+    const emailTaken = await User.exists({ email: data.email.toLowerCase(), _id: { $ne: id } });
     if (emailTaken) return { error: "Another user already uses this email." };
+  }
+
+  const normalizedNumbers = (data.accountNumbers ?? []).map(normalizeAccountNumber);
+  if (new Set(normalizedNumbers).size !== normalizedNumbers.length) {
+    return { error: "The same Customer Account number is listed twice." };
+  }
+  if (normalizedNumbers.length > 0) {
+    const taken = await CustomerAccount.findOne({
+      accountNumberNormalized: { $in: normalizedNumbers },
+      customer: { $ne: customer._id },
+    })
+      .select("accountNumber")
+      .lean();
+    if (taken) return { error: `Customer Account number ${taken.accountNumber} is already in use by another customer.` };
+  }
+
+  if (data.starlinkVesselId) {
+    const vesselError = await validateVesselIds([data.starlinkVesselId]);
+    if (vesselError) return { error: vesselError };
   }
 
   const before = { name: customer.name, email: customer.email, status: customer.status };
 
-  customer.name = parsed.data.name ?? customer.name;
-  customer.email = parsed.data.email ? parsed.data.email.toLowerCase() : customer.email;
-  customer.phone = parsed.data.phone ?? customer.phone;
-  customer.address = parsed.data.address ?? customer.address;
-  customer.company = parsed.data.company ?? customer.company;
-  customer.accountType = (parsed.data.accountType as typeof customer.accountType) ?? customer.accountType;
-  customer.contactPerson = parsed.data.contactPerson ?? customer.contactPerson;
-  customer.nidTradeLicense = parsed.data.nidTradeLicense ?? customer.nidTradeLicense;
-  customer.cardName = parsed.data.cardName ?? customer.cardName;
-  customer.iccid = parsed.data.iccid ?? customer.iccid;
-  customer.imei = parsed.data.imei ?? customer.imei;
-  customer.service = parsed.data.service ?? customer.service;
-  customer.vendor = parsed.data.vendor ?? customer.vendor;
-  if (parsed.data.network) customer.network = parsed.data.network;
+  customer.name = data.name ?? customer.name;
+  customer.email = data.email ? data.email.toLowerCase() : customer.email;
+  customer.phone = data.phone ?? customer.phone;
+  customer.address = data.address ?? customer.address;
+  customer.company = data.company ?? customer.company;
+  customer.accountType = (data.accountType as typeof customer.accountType) ?? customer.accountType;
+  customer.contactPerson = data.contactPerson ?? customer.contactPerson;
+  customer.nidTradeLicense = data.nidTradeLicense ?? customer.nidTradeLicense;
+  customer.cardName = data.cardName ?? customer.cardName;
+  customer.iccid = data.iccid ?? customer.iccid;
+  customer.imei = data.imei ?? customer.imei;
+  customer.service = data.service ?? customer.service;
+  customer.vendor = data.vendor ?? customer.vendor;
+  customer.starlinkVesselId = data.starlinkVesselId ?? customer.starlinkVesselId;
+  if (data.accountNumbers && data.accountNumbers.length > 0) {
+    customer.customerCode = data.accountNumbers[0];
+  }
+  if (data.network) customer.network = data.network;
 
   // The status pills never resurrect an INVITED login into ACTIVE (that only
   // happens when the customer completes the first-login password change).
-  if (parsed.data.status && parsed.data.status !== "INVITED" && customer.status !== "INVITED") {
-    customer.status = parsed.data.status;
-  } else if (parsed.data.status === "SUSPENDED") {
+  if (data.status && data.status !== "INVITED" && customer.status !== "INVITED") {
+    customer.status = data.status;
+  } else if (data.status === "SUSPENDED") {
     customer.status = "SUSPENDED";
   }
 
@@ -242,10 +311,117 @@ export async function updateCustomerAction(
   // Keep additional portal users' company label in step with the profile.
   await User.updateMany({ customerProfile: customer._id }, { $set: { company: customer.company } });
 
+  // Sync Customer Accounts
+  const existingAccounts = await CustomerAccount.find({ customer: customer._id }).sort({ createdAt: 1 });
+  const accountNumbers = data.accountNumbers ?? [];
+
+  if (accountNumbers.length > 0) {
+    for (let i = 0; i < accountNumbers.length; i++) {
+      const accNum = accountNumbers[i];
+      if (existingAccounts[i]) {
+        existingAccounts[i].accountNumber = accNum;
+        if (i === 0) {
+          existingAccounts[0].starlinkVesselIds = data.starlinkVesselId ? [data.starlinkVesselId] : [];
+          if (data.iccid) existingAccounts[0].iccids = [data.iccid];
+          if (data.cardName) existingAccounts[0].cardName = data.cardName;
+        }
+        await existingAccounts[i].save();
+      } else {
+        const newAccount = await CustomerAccount.create({
+          customer: customer._id,
+          accountNumber: accNum,
+          status: "ACTIVE",
+          starlinkVesselIds: i === 0 && data.starlinkVesselId ? [data.starlinkVesselId] : [],
+          iccids: i === 0 && data.iccid ? [data.iccid] : [],
+          cardName: i === 0 ? data.cardName : "",
+          createdBy: admin.id,
+        });
+        existingAccounts.push(newAccount);
+        await ActivityLog.create({
+          actor: admin.id,
+          targetCustomer: customer._id,
+          targetAccount: newAccount._id,
+          action: "CUSTOMER_ACCOUNT_CREATED",
+          meta: { accountNumber: newAccount.accountNumber },
+        });
+      }
+    }
+
+    // Clean up extra accounts if they are safe to delete
+    if (existingAccounts.length > accountNumbers.length) {
+      for (let i = accountNumbers.length; i < existingAccounts.length; i++) {
+        const extraAccount = existingAccounts[i];
+        const [invCount, usageCount, cdrCount] = await Promise.all([
+          Invoice.collection.countDocuments({ customerAccount: extraAccount._id }),
+          UsageRecord.countDocuments({ customerAccount: extraAccount._id }),
+          CdrRecord.countDocuments({ customerAccount: extraAccount._id }),
+        ]);
+        if (invCount === 0 && usageCount === 0 && cdrCount === 0) {
+          await Subscription.deleteMany({ customerAccount: extraAccount._id });
+          await User.updateMany({ accountAccess: extraAccount._id }, { $pull: { accountAccess: extraAccount._id } });
+          await CustomerAccount.deleteOne({ _id: extraAccount._id });
+        }
+      }
+    }
+  } else if (existingAccounts.length > 0) {
+    if (data.starlinkVesselId !== undefined) {
+      existingAccounts[0].starlinkVesselIds = data.starlinkVesselId ? [data.starlinkVesselId] : [];
+    }
+    if (data.iccid) existingAccounts[0].iccids = [data.iccid];
+    if (data.cardName) existingAccounts[0].cardName = data.cardName;
+    await existingAccounts[0].save();
+  }
+
+  // Sync Subscription for the primary account
+  const primaryAccount = existingAccounts[0] || (await CustomerAccount.findOne({ customer: customer._id }).sort({ createdAt: 1 }));
+  if (primaryAccount) {
+    const activeSub = await Subscription.findOne({
+      customer: customer._id,
+      customerAccount: primaryAccount._id,
+      status: "ACTIVE",
+    }).sort({ createdAt: -1 });
+
+    if (data.planId && mongoose.isValidObjectId(data.planId) && (await ServicePlan.exists({ _id: data.planId }))) {
+      if (activeSub) {
+        if (activeSub.plan.toString() !== data.planId) {
+          await ActivityLog.create({
+            actor: admin.id,
+            targetCustomer: customer._id,
+            targetAccount: primaryAccount._id,
+            action: "PLAN_CHANGED",
+            meta: { from: activeSub.plan.toString(), to: data.planId },
+          });
+          activeSub.plan = data.planId as unknown as typeof activeSub.plan;
+        }
+        activeSub.staticIp = data.staticIp ?? "";
+        if (data.iccid) activeSub.terminalIds = [data.iccid];
+        await activeSub.save();
+      } else {
+        await Subscription.create({
+          customer: customer._id,
+          customerAccount: primaryAccount._id,
+          plan: data.planId,
+          status: "ACTIVE",
+          staticIp: data.staticIp ?? "",
+          terminalIds: data.iccid ? [data.iccid] : [],
+        });
+      }
+    } else if (activeSub) {
+      activeSub.staticIp = data.staticIp ?? "";
+      if (data.iccid) activeSub.terminalIds = [data.iccid];
+      await activeSub.save();
+    }
+  }
+
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: customer._id,
-    action: before.status !== customer.status ? (customer.status === "SUSPENDED" ? "CUSTOMER_SUSPENDED" : "CUSTOMER_REACTIVATED") : "CUSTOMER_UPDATED",
+    action:
+      before.status !== customer.status
+        ? customer.status === "SUSPENDED"
+          ? "CUSTOMER_SUSPENDED"
+          : "CUSTOMER_REACTIVATED"
+        : "CUSTOMER_UPDATED",
     meta: { before, after: { name: customer.name, email: customer.email, status: customer.status } },
   });
 

@@ -139,6 +139,7 @@ export function OverviewClient({
   const [payOpen, setPayOpen] = useState(false);
   const dueInDays = payment ? daysUntil(payment.dueDate) : null;
   const firstName = customerName.split(" ")[0];
+  const firstName = (customerName || "").trim().split(/\s+/)[0] || "Customer";
 
   function updatePeriod(value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -150,9 +151,13 @@ export function OverviewClient({
   const periodInputValue = periodMonth ? `${periodMonth.slice(0, 4)}-${periodMonth.slice(4, 6)}` : "";
   const maxMbps = plan?.speedMbps ?? 0;
   const avgMbps = terminalSummary.avgThroughputMbps;
+  const avgMbps = terminalSummary?.avgThroughputMbps ?? null;
   const speedPct = maxMbps > 0 && avgMbps !== null ? Math.min(100, (avgMbps / maxMbps) * 100) : 0;
   const offlineCount = terminalSummary.terminals.filter((t) => t.onlineStatus === "OFFLINE").length;
   const unknownCount = terminalSummary.terminals.filter((t) => t.onlineStatus === "UNKNOWN").length;
+  const terminals = terminalSummary?.terminals ?? [];
+  const offlineCount = terminals.filter((t) => t.onlineStatus === "OFFLINE").length;
+  const unknownCount = terminals.filter((t) => t.onlineStatus === "UNKNOWN").length;
 
   const usedGB = liveUsage ? liveUsage.totalGB : (usage?.volumeDataGB ?? 0);
   const allowanceGB = liveUsage ? liveUsage.allowanceGB : (plan?.dataAllowanceGB ?? null);

@@ -6,7 +6,7 @@ import { CdrChargeRecord } from "@/models/CdrChargeRecord";
 import { CdrRecord } from "@/models/CdrRecord";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { formatCurrency } from "@/lib/utils/format";
-import { BillingSubNav } from "@/components/admin/BillingSubNav";
+import { CdrSubNav } from "@/components/admin/CdrSubNav";
 import { IdentifierMappingPageClient, type UnmappedIdentifierRow } from "@/components/admin/IdentifierMappingPageClient";
 import type { CdrIdentifierMappingRow } from "@/lib/types/retailBilling";
 
@@ -92,7 +92,7 @@ export default async function ProductCodesPage() {
 
   return (
     <div className="space-y-6">
-      <BillingSubNav />
+      <CdrSubNav />
       <IdentifierMappingPageClient
         mappings={mappings}
         unmapped={Array.from(unmappedByCode.values()).sort((a, b) => b.recordCount - a.recordCount)}

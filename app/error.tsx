@@ -7,6 +7,9 @@ import { AlertTriangle } from "lucide-react";
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
+    if (error) {
+      console.error(error);
+    }
   }, [error]);
 
   return (
@@ -17,6 +20,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
       <p className="mt-5 text-2xl font-bold text-text-primary">Something went wrong</p>
       <p className="mt-2 max-w-sm text-sm text-text-muted">
         An unexpected error occurred. You can try again, or head back to safety.
+        {error?.message || "An unexpected error occurred. You can try again, or head back to safety."}
       </p>
       <div className="mt-6 flex items-center gap-3">
         <button

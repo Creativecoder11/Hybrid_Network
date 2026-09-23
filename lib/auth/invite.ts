@@ -20,9 +20,11 @@ export async function issueInvite(
   user.status = "INVITED";
   await user.save();
 
-  const baseUrl = options?.isTeamInvite
-    ? (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-    : (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+  const baseUrl = (
+    options?.isTeamInvite
+      ? (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+      : (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+  ).replace(/\/+$/, "");
   const actionUrl = `${baseUrl}/set-password/${rawToken}`;
 
   await sendMail({

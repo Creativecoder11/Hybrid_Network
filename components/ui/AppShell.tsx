@@ -12,6 +12,7 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   badge?: number;
+  activeMatch?: (pathname: string) => boolean;
 };
 
 function LogoMark() {
@@ -47,8 +48,10 @@ export function AppShell({
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const isActive = (href: string) =>
-    href === brandHref ? pathname === href : pathname.startsWith(href);
+  const isActive = (item: NavItem) => {
+    if (item.activeMatch) return item.activeMatch(pathname);
+    return item.href === brandHref ? pathname === item.href : pathname.startsWith(item.href);
+  };
 
   const navList = (onNavigate?: () => void) => (
     <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
@@ -56,7 +59,7 @@ export function AppShell({
         Main
       </p>
       {navItems.map((item) => {
-        const active = isActive(item.href);
+        const active = isActive(item);
         const Icon = item.icon;
         return (
           <Link

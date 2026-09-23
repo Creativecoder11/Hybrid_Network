@@ -83,7 +83,8 @@ export async function sendCustomerInvitation(
     await user.save();
 
     const profile = user.customerProfile ? await User.findById(user.customerProfile).select("company name customerId").lean() : null;
-    const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login`;
+    const portalBase = (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "https://login.hybridnetworks.net.au").replace(/\/+$/, "");
+    const portalUrl = portalBase.endsWith("/login") ? portalBase : `${portalBase}/login`;
 
     const mail = await sendMail({
       to: user.email,

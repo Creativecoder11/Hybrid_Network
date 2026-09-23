@@ -70,15 +70,19 @@ export default async function CustomersPage({
   const periodMonth = currentPeriodMonth();
 
   const [accounts, subs, usageRecords] = await Promise.all([
-    CustomerAccount.find({ customer: { $in: customerIds } }).select("customer accountNumber").sort({ createdAt: 1 }).lean(),
+    CustomerAccount.find({ customer: { $in: customerIds } }).select("customer accountNumber starlinkVesselIds").sort({ createdAt: 1 }).lean(),
     Subscription.find({ customer: { $in: customerIds }, status: "ACTIVE" }).populate("plan").sort({ createdAt: 1 }).lean(),
     UsageRecord.find({ customer: { $in: customerIds }, periodMonth }).lean(),
   ]);
 
   const accountsByCustomer = new Map<string, string[]>();
+  const vesselByCustomer = new Map<string, string>();
   for (const a of accounts) {
     const key = a.customer.toString();
     accountsByCustomer.set(key, [...(accountsByCustomer.get(key) ?? []), a.accountNumber]);
+    if (a.starlinkVesselIds && a.starlinkVesselIds.length > 0 && !vesselByCustomer.has(key)) {
+      vesselByCustomer.set(key, a.starlinkVesselIds[0]);
+    }
   }
 
   const subByCustomer = new Map<string, { planId: string; planName: string; staticIp: string }>();
@@ -103,6 +107,7 @@ export default async function CustomersPage({
       accountNumbers: accountsByCustomer.get(c._id.toString()) ?? [],
       plan: subByCustomer.get(c._id.toString()) ?? null,
       usage: usageByCustomer.get(c._id.toString()) ?? null,
+      starlinkVesselId: vesselByCustomer.get(c._id.toString()) ?? null,
     })
   );
 

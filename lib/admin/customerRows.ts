@@ -49,6 +49,7 @@ export function toCustomerRow(
     accountNumbers: string[];
     plan?: { planId: string; planName: string; staticIp: string } | null;
     usage?: UsageLean | null;
+    starlinkVesselId?: string | null;
   }
 ): CustomerRow {
   const usage = extras.usage;
@@ -72,7 +73,7 @@ export function toCustomerRow(
     imei: c.imei ?? "",
     service: c.service ?? "",
     vendor: c.vendor ?? "",
-    starlinkVesselId: c.starlinkVesselId ?? "",
+    starlinkVesselId: c.starlinkVesselId || extras.starlinkVesselId || "",
     starlinkServiceLineNumber: c.starlinkServiceLineNumber ?? "",
     network: {
       originNumber: c.network?.originNumber ?? "",

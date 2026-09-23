@@ -4,7 +4,7 @@ import { connectDB } from "@/lib/db/connect";
 import { CdrChargeRecord } from "@/models/CdrChargeRecord";
 import { CdrImportBatch } from "@/models/CdrImportBatch";
 import { loadAccountOptions, toChargeRow } from "@/lib/admin/cdrOptions";
-import { BillingSubNav } from "@/components/admin/BillingSubNav";
+import { CdrSubNav } from "@/components/admin/CdrSubNav";
 import { CdrRecordsPageClient } from "@/components/admin/CdrRecordsPageClient";
 import type { CdrChargeRecordRow } from "@/lib/types/retailBilling";
 
@@ -57,7 +57,7 @@ export default async function CdrRecordsPage({
 
   return (
     <div className="space-y-6">
-      <BillingSubNav />
+      <CdrSubNav />
       <CdrRecordsPageClient
         records={records}
         status={status}

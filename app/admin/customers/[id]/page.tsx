@@ -120,6 +120,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       accountNumbers: accounts.map((a) => a.accountNumber),
       plan: firstPlan ? { planId: firstPlan._id.toString(), planName: firstPlan.name, staticIp: firstAccountSub?.staticIp ?? "" } : null,
       usage: usageRecords.find((u) => u.periodMonth === currentPeriod) ?? null,
+      starlinkVesselId: customer.starlinkVesselId || accounts[0]?.starlinkVesselIds?.[0] || null,
     }),
     mustChangePassword: Boolean(customer.mustChangePassword),
     tempPasswordExpiresAt: customer.tempPasswordExpiresAt ? (customer.tempPasswordExpiresAt as Date).toISOString() : null,

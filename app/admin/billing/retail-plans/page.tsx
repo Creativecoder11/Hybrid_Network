@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/db/connect";
 import { RetailPlan } from "@/models/RetailPlan";
 import { CdrIdentifierMapping } from "@/models/CdrIdentifierMapping";
 import { getCurrentUser } from "@/lib/auth/dal";
-import { BillingSubNav } from "@/components/admin/BillingSubNav";
+import { CdrSubNav } from "@/components/admin/CdrSubNav";
 import { RetailPlansPageClient } from "@/components/admin/RetailPlansPageClient";
 import type { RetailPlanRow } from "@/lib/types/retailBilling";
 
@@ -41,7 +41,7 @@ export default async function RetailPlansPage() {
 
   return (
     <div className="space-y-6">
-      <BillingSubNav />
+      <CdrSubNav />
       <RetailPlansPageClient plans={rows} canDelete={currentUser?.role === "SUPER_ADMIN"} />
     </div>
   );

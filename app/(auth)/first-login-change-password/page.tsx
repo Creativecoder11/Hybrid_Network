@@ -28,6 +28,7 @@ export default async function FirstLoginChangePasswordPage() {
       <p className="text-2xl font-bold text-text-primary">First-Time Login Security</p>
       <p className="mt-1.5 text-sm text-text-muted">
         Welcome, {user.name.split(" ")[0]}. You are currently logged in with a temporary password.
+        Welcome, {(user?.name || "").trim().split(/\s+/)[0] || "there"}. You are currently logged in with a temporary password.
         For account security, you must set a new password before accessing your dashboard.
       </p>
 
@@ -35,6 +36,7 @@ export default async function FirstLoginChangePasswordPage() {
         <div className="flex items-center justify-between">
           <span className="text-text-muted">User Profile</span>
           <span className="font-medium text-text-primary">{user.name}</span>
+          <span className="font-medium text-text-primary">{user?.name || "--"}</span>
         </div>
         {user.customerId && (
           <div className="flex items-center justify-between">

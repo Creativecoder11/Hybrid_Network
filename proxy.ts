@@ -30,6 +30,8 @@ function crossDomainUrl(base: string, pathname: string, search: string): string 
 
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+  const hostname = req.nextUrl.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local");
 
   if (ALWAYS_PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
@@ -44,6 +46,15 @@ export async function proxy(req: NextRequest) {
   // yet, so a half-finished env setup fails safe rather than 404ing.
   if (PORTAL_MODE === "admin" && isPortalRoute && CUSTOMER_PORTAL_URL) {
     return NextResponse.redirect(crossDomainUrl(CUSTOMER_PORTAL_URL, pathname, search));
+  // In local development, bypass cross-domain redirection to allow testing
+  // both portals locally on the same development server.
+  if (!isLocalhost) {
+    if (PORTAL_MODE === "admin" && isPortalRoute && CUSTOMER_PORTAL_URL) {
+      return NextResponse.redirect(crossDomainUrl(CUSTOMER_PORTAL_URL, pathname, search));
+    }
+    if (PORTAL_MODE === "customer" && isAdminRoute && ADMIN_PORTAL_URL) {
+      return NextResponse.redirect(crossDomainUrl(ADMIN_PORTAL_URL, pathname, search));
+    }
   }
   if (PORTAL_MODE === "customer" && isAdminRoute && ADMIN_PORTAL_URL) {
     return NextResponse.redirect(crossDomainUrl(ADMIN_PORTAL_URL, pathname, search));
@@ -54,6 +65,9 @@ export async function proxy(req: NextRequest) {
 
   if (pathname === "/") {
     if (!session) return NextResponse.redirect(new URL("/login", req.url));
+    if (isLocalhost) {
+      return NextResponse.redirect(new URL(roleHome, req.url));
+    }
     const rightPortalHere =
       PORTAL_MODE === "admin" ? roleHome === "/admin" : PORTAL_MODE === "customer" ? roleHome === "/portal" : true;
     if (rightPortalHere) return NextResponse.redirect(new URL(roleHome, req.url));

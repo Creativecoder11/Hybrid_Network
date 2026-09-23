@@ -277,9 +277,11 @@ export async function forgotPasswordAction(
     user.resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
     await user.save();
 
-    const baseUrl = user.role === "CUSTOMER"
-      ? (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-      : (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+    const baseUrl = (
+      user.role === "CUSTOMER"
+        ? (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+        : (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+    ).replace(/\/+$/, "");
     const actionUrl = `${baseUrl}/reset-password/${rawToken}`;
     await sendMail({
       to: user.email,

@@ -49,12 +49,14 @@ export default async function SetPasswordPage({
       <p className="text-2xl font-bold text-text-primary">Set your password</p>
       <p className="mt-1.5 text-sm text-text-muted">
         Welcome, {user.name.split(" ")[0]}. Choose a password to activate your account.
+        Welcome, {(user?.name || "").trim().split(/\s+/)[0] || "there"}. Choose a password to activate your account.
       </p>
 
       <div className="mt-5 space-y-3 rounded-xl border border-line bg-surface-raised p-4 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-text-muted">Name</span>
           <span className="font-medium text-text-primary">{user.name}</span>
+          <span className="font-medium text-text-primary">{user?.name || "--"}</span>
         </div>
         {user.customerId && (
           <div className="flex items-center justify-between">

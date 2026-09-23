@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/db/connect";
 import { CdrImportBatch } from "@/models/CdrImportBatch";
-import { BillingSubNav } from "@/components/admin/BillingSubNav";
+import { CdrSubNav } from "@/components/admin/CdrSubNav";
 import { CdrImportPageClient } from "@/components/admin/CdrImportPageClient";
 import type { CdrImportBatchRow } from "@/lib/types/retailBilling";
 
 export const metadata: Metadata = {
-  title: "CDR Import | Hybrid Networks Admin",
+  title: "CDR Upload | Hybrid Networks Admin",
 };
 
 export default async function CdrImportPage() {
@@ -41,7 +41,7 @@ export default async function CdrImportPage() {
 
   return (
     <div className="space-y-6">
-      <BillingSubNav />
+      <CdrSubNav />
       <CdrImportPageClient batches={rows} />
     </div>
   );

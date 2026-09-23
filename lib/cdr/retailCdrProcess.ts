@@ -8,6 +8,7 @@ import { parseRetailCsv, type ColumnOverride, type ColumnDetection, type RetailC
 import { allocateRow, buildAllocationContext, type AccountRef, type AllocationContext } from "./allocation";
 import { computeDedupeKeys, hashBuffer, chunk } from "./dedupe";
 import { notifyUnallocatedRecords } from "./alerts";
+import { upsertUsageRecords } from "./aggregator";
 import { calculateRetailCharge } from "@/lib/billing/pricingEngine";
 import { roundCurrency } from "@/lib/billing/money";
 
@@ -329,6 +330,71 @@ export async function processRetailCdrImport(params: {
     });
 
     await insertCharges(docs);
+
+    // Aggregate and upsert usage records for all matched rows so customer portal and usage dashboard update immediately
+    const matchedDocs = docs.filter(
+      (d) => d.status === "MATCHED" && Boolean(d.customer) && Boolean(d.customerAccount)
+    );
+    if (matchedDocs.length > 0) {
+      const usageGroups = new Map<
+        string,
+        {
+          customerId: string;
+          accountId: string;
+          period: string;
+          totals: {
+            volumeDataBytes: number;
+            volumeMin: number;
+            volumeMsg: number;
+            volumeInBundleBytes: number;
+            volumeOutBundleBytes: number;
+            volumeTotalBytes: number;
+            consumptionMoney: number;
+            consumptionDataBytes: number;
+            consumptionMin: number;
+            consumptionMsg: number;
+            cdrPriceTotal: number;
+            cdrPriceInvoiced: number;
+            currency: string;
+          };
+        }
+      >();
+
+      for (const doc of matchedDocs) {
+        const d = doc.eventAt instanceof Date && !Number.isNaN(doc.eventAt.getTime()) ? doc.eventAt : new Date();
+        const period = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        const customerId = String(doc.customer);
+        const accountId = String(doc.customerAccount);
+        const key = `${accountId}|${period}`;
+        let group = usageGroups.get(key);
+        if (!group) {
+          group = {
+            customerId,
+            accountId,
+            period,
+            totals: {
+              volumeDataBytes: 0,
+              volumeMin: 0,
+              volumeMsg: 0,
+              volumeInBundleBytes: 0,
+              volumeOutBundleBytes: 0,
+              volumeTotalBytes: 0,
+              consumptionMoney: 0,
+              consumptionDataBytes: 0,
+              consumptionMin: 0,
+              consumptionMsg: 0,
+              cdrPriceTotal: 0,
+              cdrPriceInvoiced: 0,
+              currency: String(doc.currency || "USD"),
+            },
+          };
+          usageGroups.set(key, group);
+        }
+        group.totals.consumptionMoney += Number(doc.wholesaleAmount) || 0;
+        group.totals.cdrPriceTotal += Number(doc.retailAmount) || 0;
+      }
+      await upsertUsageRecords(usageGroups, "ACCUMULATE", batchId, params.uploadedBy);
+    }
 
     const summary = await summarizeBatch(batch._id);
     const distinctCustomerCodes = new Set(rows.map((r) => r.customerCode.trim().toUpperCase()).filter(Boolean)).size;

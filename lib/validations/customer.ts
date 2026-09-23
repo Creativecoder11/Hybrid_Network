@@ -15,34 +15,38 @@ export const networkInfoSchema = z.object({
 });
 
 export const createCustomerSchema = z.object({
-  name: z.string().min(2, "Full name is required"),
+  name: z.string().trim().min(2, "Full name is required"),
   email: z.email("Enter a valid email"),
-  phone: z.string().optional().default(""),
+  phone: z.string().trim().min(1, "Phone number is required"),
   address: z.string().optional().default(""),
   company: z.string().optional().default(""),
 
-  accountType: z.enum(ACCOUNT_TYPES).optional().nullable(),
+  accountType: z.enum(ACCOUNT_TYPES, {
+    message: "Account type is required",
+  }),
   contactPerson: z.string().optional().default(""),
-  nidTradeLicense: z.string().optional().default(""),
-  // Initial Customer Account numbers (create only). Accounts are managed
-  // individually afterwards (lib/actions/accounts.ts).
-  accountNumbers: z.array(accountNumberField).max(20).optional().default([]),
+  nidTradeLicense: z.string().trim().min(1, "NID / Trade License is required"),
+  // Customer Account numbers (required, at least 1).
+  accountNumbers: z
+    .array(accountNumberField)
+    .min(1, "At least one Customer Account number is required")
+    .max(20),
   cardName: z.string().optional().default(""),
   iccid: z.string().optional().default(""),
   imei: z.string().optional().default(""),
   service: z.string().optional().default(""),
   vendor: z.string().optional().default(""),
-  starlinkVesselId: z.string().optional().default(""),
+  starlinkVesselId: z.string().trim().min(1, "Starlink Vessel ID is required"),
   starlinkServiceLineNumber: z.string().optional().default(""),
 
   network: networkInfoSchema.optional(),
 
-  planId: z.string().optional().nullable(),
+  planId: z.string().trim().min(1, "Service plan is required"),
   staticIp: z.string().optional().default(""),
 });
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 
-export const updateCustomerSchema = createCustomerSchema.partial().extend({
+export const updateCustomerSchema = createCustomerSchema.extend({
   id: z.string().min(1),
   status: z.enum(["ACTIVE", "SUSPENDED", "INVITED"]).optional(),
 });

@@ -46,6 +46,7 @@ export default async function ResetPasswordPage({
     <div>
       <p className="text-2xl font-bold text-text-primary">Reset your password</p>
       <p className="mt-1.5 text-sm text-text-muted">Hi {user.name.split(" ")[0]}, choose a new password below.</p>
+      <p className="mt-1.5 text-sm text-text-muted">Hi {(user?.name || "").trim().split(/\s+/)[0] || "there"}, choose a new password below.</p>
       <ResetPasswordForm token={token} />
     </div>
   );

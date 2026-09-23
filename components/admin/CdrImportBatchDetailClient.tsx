@@ -51,6 +51,7 @@ export function CdrImportBatchDetailClient({
       >
         <ArrowLeft className="size-3.5" />
         Back to CDR Import
+        Back to CDR Upload
       </Link>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

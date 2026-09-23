@@ -23,14 +23,17 @@ export function formatCurrency(
 ): string {
   const value = amount ?? 0;
   try {
-    return new Intl.NumberFormat("en-US", {
+    const formatted = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
+      currencyDisplay: "narrowSymbol",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
+    return formatted.replace(/^(-?)[A-Za-z]+(?=\$)/, "$1");
   } catch {
-    return `${currency} ${value.toFixed(2)}`;
+    const sign = value < 0 ? "-$" : "$";
+    return `${sign}${Math.abs(value).toFixed(2)}`;
   }
 }
 

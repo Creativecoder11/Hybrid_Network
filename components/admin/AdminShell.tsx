@@ -28,9 +28,29 @@ function baseNav(unreadSupportCount: number): NavItem[] {
   return [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { label: "Customers", href: "/admin/customers", icon: Users },
-    { label: "Billing", href: "/admin/billing", icon: Receipt },
+    {
+      label: "Billing",
+      href: "/admin/billing",
+      icon: Receipt,
+      activeMatch: (pathname) =>
+        pathname === "/admin/billing" ||
+        (pathname.startsWith("/admin/billing/") &&
+          !pathname.startsWith("/admin/billing/cdr-") &&
+          !pathname.startsWith("/admin/billing/retail-plans") &&
+          !pathname.startsWith("/admin/billing/identifier-mapping")),
+    },
+    {
+      label: "CDR Upload",
+      href: "/admin/billing/cdr-import",
+      icon: UploadCloud,
+      activeMatch: (pathname) =>
+        pathname.startsWith("/admin/billing/cdr-") ||
+        pathname.startsWith("/admin/billing/retail-plans") ||
+        pathname.startsWith("/admin/billing/identifier-mapping") ||
+        pathname.startsWith("/admin/cdr-upload"),
+    },
     { label: "Service Plans", href: "/admin/plans", icon: Wifi },
-    { label: "CDR Upload", href: "/admin/cdr-upload", icon: UploadCloud },
+    
     { label: "Terminals", href: "/admin/terminals", icon: Satellite },
     { label: "Tracking", href: "/admin/tracking", icon: MapPin },
     { label: "Usage", href: "/admin/usage", icon: Gauge },

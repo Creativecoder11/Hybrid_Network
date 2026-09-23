@@ -148,6 +148,45 @@ export async function createInvoiceAction(
     createdBy: admin.id,
   });
 
+  // Automatically email the invoice PDF to the customer
+  try {
+    const pdfData = await buildInvoicePdfData(invoice._id.toString());
+    if (pdfData) {
+      const pdfBuffer = await renderInvoicePdf(pdfData);
+      const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoice._id.toString()}`;
+
+      const mail = await sendMail({
+        to: customer.email,
+        subject: `Invoice ${invoice.invoiceNumber} from Hybrid Networks`,
+        html: invoiceEmailHtml({
+          name: customer.name,
+          invoiceNumber: invoice.invoiceNumber,
+          amount: formatCurrency(invoice.total, invoice.currency),
+          dueDate: formatDate(invoice.dueDate),
+          portalUrl,
+        }),
+        attachments: [{ filename: `${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
+      });
+
+      invoice.sentAt = new Date();
+      invoice.pdfGeneratedAt = new Date();
+      if (invoice.status === "DRAFT") {
+        invoice.status = invoice.dueDate.getTime() < Date.now() ? "OVERDUE" : "DUE";
+      }
+      await invoice.save();
+
+      await ActivityLog.create({
+        actor: admin.id,
+        targetCustomer: customer._id,
+        targetAccount: account._id,
+        action: "INVOICE_SENT",
+        meta: { invoiceNumber: invoice.invoiceNumber, autoSentOnCreate: true, delivered: mail.delivered },
+      });
+    }
+  } catch (err) {
+    console.error("[invoices] Auto email send failed on create:", err);
+  }
+
   await ActivityLog.create({
     actor: admin.id,
     targetCustomer: customer._id,
