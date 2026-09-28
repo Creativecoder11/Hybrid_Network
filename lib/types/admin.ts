@@ -19,6 +19,7 @@ export type CustomerRow = {
   company: string;
   customerId: string;
   customerCode: string;
+  trackingEnabled?: boolean;
   /** Customer Account numbers (Customer Codes) owned by this profile. */
   accountNumbers: string[];
   status: "ACTIVE" | "SUSPENDED" | "INVITED";

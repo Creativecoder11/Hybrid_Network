@@ -164,8 +164,18 @@ export async function deleteCustomerAccountAction(accountId: string): Promise<Ac
   }
 
   await Promise.all([
+    Invoice.deleteMany({ customerAccount: account._id }),
     Subscription.deleteMany({ customerAccount: account._id }),
+    UsageRecord.deleteMany({ customerAccount: account._id }),
     User.updateMany({ accountAccess: account._id }, { $pull: { accountAccess: account._id } }),
+    CdrRecord.updateMany(
+      { customerAccount: account._id },
+      { $set: { customerAccount: null, allocationStatus: "UNALLOCATED", unallocatedReasonCode: "CUSTOMER_NOT_FOUND" } }
+    ),
+    CdrChargeRecord.updateMany(
+      { customerAccount: account._id },
+      { $set: { customerAccount: null, status: "UNMATCHED", unallocatedReasonCode: "CUSTOMER_CODE_NOT_FOUND" } }
+    ),
     CustomerAccount.deleteOne({ _id: account._id }),
   ]);
   await ActivityLog.create({
@@ -176,5 +186,7 @@ export async function deleteCustomerAccountAction(accountId: string): Promise<Ac
   });
 
   revalidatePath(`/admin/customers/${account.customer.toString()}`);
+  revalidatePath("/admin/customers");
+  revalidatePath("/admin/billing");
   return { success: `Customer Account ${account.accountNumber} deleted.` };
 }

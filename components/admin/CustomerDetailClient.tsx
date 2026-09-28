@@ -30,11 +30,13 @@ import { UsageHistoryEditModal } from "@/components/admin/UsageHistoryEditModal"
 import { CustomerAccountFormModal } from "@/components/admin/CustomerAccountFormModal";
 import { PortalUserModal } from "@/components/admin/PortalUserModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
+import { Switch } from "@/components/ui/Switch";
 import {
   deleteCustomerAction,
   resendInviteAction,
   suspendCustomerAction,
   reactivateCustomerAction,
+  setCustomerTrackingAction,
 } from "@/lib/actions/customers";
 import { deleteCustomerAccountAction } from "@/lib/actions/accounts";
 import {
@@ -694,42 +696,81 @@ export function CustomerDetailClient({
               ),
           },
           {
-            key: "actions",
-            label: "Actions",
+            key: "settings-actions",
+            label: "Settings & Actions",
             content: (
-              <div className="max-w-sm space-y-3">
-                {(customer.status === "INVITED" || customer.mustChangePassword) && (
-                  <ActionButton
-                    icon={Mail}
-                    label="Re-send Invitation (new temporary password)"
-                    pending={pendingAction === "resend"}
-                    onClick={() => runAction("resend", () => resendInviteAction(customer.id))}
-                  />
-                )}
-                {customer.status !== "SUSPENDED" ? (
-                  <ActionButton
-                    icon={Ban}
-                    label="Suspend Customer"
-                    pending={pendingAction === "suspend"}
-                    onClick={() => runAction("suspend", () => suspendCustomerAction(customer.id))}
-                  />
-                ) : (
-                  <ActionButton
-                    icon={CheckCircle2}
-                    label="Reactivate Customer"
-                    pending={pendingAction === "reactivate"}
-                    onClick={() => runAction("reactivate", () => reactivateCustomerAction(customer.id))}
-                  />
-                )}
-                {canDelete && (
-                  <ActionButton
-                    icon={Trash2}
-                    label="Delete Customer"
-                    tone="red"
-                    pending={pendingAction === "delete"}
-                    onClick={() => setDeleteOpen(true)}
-                  />
-                )}
+              <div className="max-w-xl space-y-6">
+                <Card>
+                  <CardContent className="pt-5 space-y-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-accent-green">
+                      Customer Portal Features
+                    </p>
+                    <div className="flex items-center justify-between rounded-xl border border-line bg-surface-raised p-4">
+                      <div className="space-y-0.5 pr-4">
+                        <p className="text-sm font-semibold text-text-primary">GPS Vessel Tracking</p>
+                        <p className="text-xs text-text-muted">
+                          Allow or block this customer from viewing the Tracking menu and live map in their customer portal.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-semibold ${customer.trackingEnabled !== false ? "text-accent-green" : "text-text-muted"}`}>
+                          {customer.trackingEnabled !== false ? "ENABLED" : "DISABLED"}
+                        </span>
+                        <Switch
+                          checked={customer.trackingEnabled !== false}
+                          disabled={pendingAction === "toggle-tracking"}
+                          onChange={(checked) =>
+                            runAction("toggle-tracking", async () => {
+                              const res = await setCustomerTrackingAction(customer.id, checked);
+                              if (res?.error) return { error: res.error };
+                              return { success: res?.success ?? "Feature updated." };
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-5 space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-accent-green">
+                      Account Actions
+                    </p>
+                    {(customer.status === "INVITED" || customer.mustChangePassword) && (
+                      <ActionButton
+                        icon={Mail}
+                        label="Re-send Invitation (new temporary password)"
+                        pending={pendingAction === "resend"}
+                        onClick={() => runAction("resend", () => resendInviteAction(customer.id))}
+                      />
+                    )}
+                    {customer.status !== "SUSPENDED" ? (
+                      <ActionButton
+                        icon={Ban}
+                        label="Suspend Customer"
+                        pending={pendingAction === "suspend"}
+                        onClick={() => runAction("suspend", () => suspendCustomerAction(customer.id))}
+                      />
+                    ) : (
+                      <ActionButton
+                        icon={CheckCircle2}
+                        label="Reactivate Customer"
+                        pending={pendingAction === "reactivate"}
+                        onClick={() => runAction("reactivate", () => reactivateCustomerAction(customer.id))}
+                      />
+                    )}
+                    {canDelete && (
+                      <ActionButton
+                        icon={Trash2}
+                        label="Delete Customer"
+                        tone="red"
+                        pending={pendingAction === "delete"}
+                        onClick={() => setDeleteOpen(true)}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             ),
           },

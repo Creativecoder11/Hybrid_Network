@@ -10,6 +10,8 @@ import { ServicePlan } from "@/models/ServicePlan";
 import { UsageRecord } from "@/models/UsageRecord";
 import { Invoice } from "@/models/Invoice";
 import { CdrRecord } from "@/models/CdrRecord";
+import { CdrChargeRecord } from "@/models/CdrChargeRecord";
+import { SupportTicket } from "@/models/SupportTicket";
 import { ActivityLog } from "@/models/ActivityLog";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateCustomerId } from "@/lib/utils/ids";
@@ -98,6 +100,7 @@ export async function createCustomerAction(
     starlinkVesselId: str(formData, "starlinkVesselId"),
     planId: str(formData, "planId"),
     staticIp: str(formData, "staticIp"),
+    trackingEnabled: formData.get("trackingEnabled") !== "false",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
@@ -143,6 +146,7 @@ export async function createCustomerAction(
     imei: data.imei,
     service: data.service,
     vendor: data.vendor,
+    trackingEnabled: data.trackingEnabled !== false,
     network: data.network,
     customerProfile: null,
     accountAccessAll: true,
@@ -243,6 +247,7 @@ export async function updateCustomerAction(
     starlinkVesselId,
     planId,
     staticIp,
+    trackingEnabled: formData.has("trackingEnabled") ? formData.get("trackingEnabled") !== "false" : undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
@@ -293,6 +298,9 @@ export async function updateCustomerAction(
   customer.service = data.service ?? customer.service;
   customer.vendor = data.vendor ?? customer.vendor;
   customer.starlinkVesselId = data.starlinkVesselId ?? customer.starlinkVesselId;
+  if (data.trackingEnabled !== undefined) {
+    customer.trackingEnabled = data.trackingEnabled;
+  }
   if (data.accountNumbers && data.accountNumbers.length > 0) {
     customer.customerCode = data.accountNumbers[0];
   }
@@ -434,6 +442,8 @@ export async function updateCustomerAction(
  * Deletes a Customer Profile, its additional portal users, accounts and
  * subscriptions. Refused while the customer has invoices — tax invoices must
  * keep their customer; suspend the customer instead.
+ * Deletes a Customer Profile, its additional portal users, accounts,
+ * invoices, subscriptions, usage and unlinks any related CDR records.
  */
 export async function deleteCustomerAction(customerId: string): Promise<ActionState> {
   const admin = await getAuthorizedUser(["SUPER_ADMIN"]);
@@ -453,10 +463,20 @@ export async function deleteCustomerAction(customerId: string): Promise<ActionSt
 
   const accountIds = (await CustomerAccount.find({ customer: customer._id }).select("_id").lean()).map((a) => a._id);
   await Promise.all([
+    Invoice.deleteMany({ customer: customer._id }),
     Subscription.deleteMany({ customer: customer._id }),
     UsageRecord.deleteMany({ customer: customer._id }),
+    SupportTicket.deleteMany({ customer: customer._id }),
     CustomerAccount.deleteMany({ customer: customer._id }),
     User.deleteMany({ customerProfile: customer._id }),
+    CdrRecord.updateMany(
+      { customer: customer._id },
+      { $set: { customer: null, customerAccount: null, allocationStatus: "UNALLOCATED", unallocatedReasonCode: "CUSTOMER_NOT_FOUND" } }
+    ),
+    CdrChargeRecord.updateMany(
+      { customer: customer._id },
+      { $set: { customer: null, customerAccount: null, status: "UNMATCHED", unallocatedReasonCode: "CUSTOMER_CODE_NOT_FOUND" } }
+    ),
   ]);
   await User.deleteOne({ _id: customer._id });
 
@@ -467,6 +487,8 @@ export async function deleteCustomerAction(customerId: string): Promise<ActionSt
   });
 
   revalidatePath("/admin/customers");
+  revalidatePath("/admin/billing");
+  revalidatePath("/admin/dashboard");
   return { success: "Customer deleted." };
 }
 
@@ -596,4 +618,33 @@ export async function updateManualUsageAction(
 
   revalidatePath(`/admin/customers/${customerId}`);
   return { success: `Usage for ${periodMonth} updated.` };
+}
+
+export async function setCustomerTrackingAction(
+  customerId: string,
+  enabled: boolean
+): Promise<{ error?: string; success?: string }> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  if (!mongoose.isValidObjectId(customerId)) return { error: "Invalid customer ID." };
+
+  await connectDB();
+  const customer = await User.findOne({ _id: customerId, ...CUSTOMER_PROFILE_FILTER });
+  if (!customer) return { error: "Customer not found." };
+
+  customer.trackingEnabled = enabled;
+  await customer.save();
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: customer._id,
+    action: enabled ? "CUSTOMER_TRACKING_ENABLED" : "CUSTOMER_TRACKING_DISABLED",
+    meta: { trackingEnabled: enabled },
+  });
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath("/admin/customers");
+  revalidatePath("/portal");
+  return { success: `Tracking feature ${enabled ? "enabled" : "disabled"} for ${customer.name}.` };
 }

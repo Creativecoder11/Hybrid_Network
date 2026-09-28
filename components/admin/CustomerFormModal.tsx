@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Label } from "@/components/ui/Label";
 import { Button } from "@/components/ui/Button";
+import { Switch } from "@/components/ui/Switch";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { createCustomerAction, updateCustomerAction, type ActionState } from "@/lib/actions/customers";
 import { formatCurrency } from "@/lib/utils/format";
@@ -52,6 +53,7 @@ export function CustomerFormModal({
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(action, undefined);
   const [status, setStatus] = useState<"ACTIVE" | "SUSPENDED" | "INVITED">(customer?.status ?? "ACTIVE");
   const [planId, setPlanId] = useState(customer?.planId ?? "");
+  const [trackingEnabled, setTrackingEnabled] = useState(customer?.trackingEnabled !== false);
 
   useEffect(() => {
     if (state?.success && mode === "edit") {
@@ -331,6 +333,23 @@ export function CustomerFormModal({
           <Field label="Destination State">
             <Input name="destinationState" defaultValue={customer?.network.destinationState} />
           </Field>
+        </div>
+
+        <SectionLabel>Portal Features &amp; Permissions</SectionLabel>
+        <div className="flex items-center justify-between rounded-xl border border-line bg-surface-raised p-4">
+          <div className="space-y-0.5 pr-4">
+            <p className="text-sm font-semibold text-text-primary">GPS Tracking Feature</p>
+            <p className="text-xs text-text-muted">
+              Enable or disable live vessel tracking and tracking history in this customer&apos;s portal.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`text-xs font-semibold ${trackingEnabled ? "text-accent-green" : "text-text-muted"}`}>
+              {trackingEnabled ? "ENABLED" : "DISABLED"}
+            </span>
+            <input type="hidden" name="trackingEnabled" value={trackingEnabled ? "true" : "false"} />
+            <Switch checked={trackingEnabled} onChange={setTrackingEnabled} />
+          </div>
         </div>
 
         {state?.error && (

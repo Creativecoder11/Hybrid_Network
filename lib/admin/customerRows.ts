@@ -26,6 +26,7 @@ type ProfileLean = {
   vendor?: string | null;
   starlinkVesselId?: string | null;
   starlinkServiceLineNumber?: string | null;
+  trackingEnabled?: boolean | null;
   network?: Partial<CustomerRow["network"]> | null;
 };
 
@@ -62,6 +63,7 @@ export function toCustomerRow(
     company: c.company ?? "",
     customerId: c.customerId ?? "",
     customerCode: extras.accountNumbers[0] ?? c.customerCode ?? "",
+    trackingEnabled: c.trackingEnabled !== false,
     accountNumbers: extras.accountNumbers,
     status: c.status,
     createdAt: c.createdAt?.toISOString() ?? "",

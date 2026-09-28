@@ -38,6 +38,7 @@ export const createCustomerSchema = z.object({
   vendor: z.string().optional().default(""),
   starlinkVesselId: z.string().trim().min(1, "Starlink Vessel ID is required"),
   starlinkServiceLineNumber: z.string().optional().default(""),
+  trackingEnabled: z.boolean().optional().default(true),
 
   network: networkInfoSchema.optional(),
 

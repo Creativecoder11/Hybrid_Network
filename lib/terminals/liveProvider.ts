@@ -249,7 +249,29 @@ function buildRecord(
   const lastSeenAt = telemetry?.lastSeenAt ?? telemetry?.latestTelemetryTimestamp ?? null;
   const connectivity = deriveConnectivity({ telemetryAvailable, lastSeenAt });
   const dropRate = num(telemetry?.pingDropRateAvg);
-  const downlink = round(num(telemetry?.downlinkThroughputMbps), 2);
+
+  // Starlink API returns signalQualityPercent as a normalized fraction (0.0 to 1.0)
+  // where 1.0 = 100%, 0.96 = 96%.
+  const rawSignal = num(telemetry?.signalQualityPercent);
+  const signalQualityPct =
+    rawSignal === null
+      ? null
+      : rawSignal <= 1 && rawSignal > 0
+      ? round(rawSignal * 100, 0)
+      : rawSignal === 0
+      ? 0
+      : round(rawSignal, 0);
+
+  const rawObstruction = num(telemetry?.obstructionPercentTime);
+  const obstructionPct =
+    rawObstruction === null
+      ? null
+      : rawObstruction <= 1 && rawObstruction > 0
+      ? round(rawObstruction * 100, 2)
+      : round(rawObstruction, 2);
+
+  const downlink = round(num(telemetry?.downlinkThroughputMbps), 3);
+  const uplink = round(num(telemetry?.uplinkThroughputMbps), 3);
 
   return {
     id: terminal.userTerminalId,
@@ -288,7 +310,7 @@ function buildRecord(
       onlineStatus: connectivity.onlineStatus,
       connectionState: connectivity.connectionState,
       signalStrengthDbm: null,
-      signalQualityPct: round(num(telemetry?.signalQualityPercent), 0),
+      signalQualityPct,
       dataSessionStatus: connectivity.onlineStatus === "ONLINE" ? "ACTIVE" : "NONE",
       lastSeenAt,
       statusReason: connectivity.statusReason,
@@ -313,12 +335,12 @@ function buildRecord(
       packetLossPct: dropRate === null ? null : round(dropRate * 100, 2),
       uptimePct: null,
       uptimeSeconds: num(telemetry?.uptimeSeconds),
-      obstructionPct: round(num(telemetry?.obstructionPercentTime), 2),
+      obstructionPct,
       downtimeMinutesLast30d: null,
       bandwidthMbps: null,
       throughputMbps: downlink,
       downlinkThroughputMbps: downlink,
-      uplinkThroughputMbps: round(num(telemetry?.uplinkThroughputMbps), 2),
+      uplinkThroughputMbps: uplink,
       measuredAt: telemetry?.latestTelemetryTimestamp ?? telemetry?.lastSeenAt ?? null,
       linkQuality: null,
     },

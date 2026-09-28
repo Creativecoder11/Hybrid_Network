@@ -9,7 +9,11 @@ export function fmtPct(v: number | null | undefined, decimals = 0): string {
 
 export function fmtMbps(v: number | null | undefined): string {
   if (typeof v !== "number") return NOT_AVAILABLE;
-  return `${v >= 10 ? v.toFixed(0) : v.toFixed(1)} Mbps`;
+  if (v === 0) return "0.0 dB";
+  if (v < 0.01 && v > 0) return "< 0.01 dB";
+  if (v < 1) return `${v.toFixed(2)} dB`;
+  if (v < 10) return `${v.toFixed(1)} dB`;
+  return `${v.toFixed(0)} dB`;
 }
 
 export function fmtMs(v: number | null | undefined): string {

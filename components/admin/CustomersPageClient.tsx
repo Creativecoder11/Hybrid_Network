@@ -235,6 +235,7 @@ export function CustomersPageClient({
                 <TH>Joined</TH>
                 <TH>Plan</TH>
                 <TH>Status</TH>
+                <TH>Tracking</TH>
                 <TH className="text-right">Actions</TH>
               </TR>
             </THead>
@@ -274,6 +275,11 @@ export function CustomersPageClient({
                   <TD>
                     <Badge tone={STATUS_TONE[c.status]}>
                       {STATUS_LABEL[c.status]}
+                    </Badge>
+                  </TD>
+                  <TD>
+                    <Badge tone={c.trackingEnabled !== false ? "green" : "neutral"}>
+                      {c.trackingEnabled !== false ? "ON" : "OFF"}
                     </Badge>
                   </TD>
                   <TD>

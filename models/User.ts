@@ -87,6 +87,7 @@ const UserSchema = new Schema(
     // admin-entered identifier — not derived from iccid/imei above.
     starlinkVesselId: { type: String, default: "", index: true },
     starlinkServiceLineNumber: { type: String, default: "" },
+    trackingEnabled: { type: Boolean, default: true },
     network: { type: NetworkInfoSchema, default: () => ({}) },
 
     // Portal users. A CUSTOMER user with customerProfile = null IS the
