@@ -138,6 +138,22 @@ export function CustomerDetailClient({
   const accountNumberById = new Map(accounts.map((a) => [a.id, a.accountNumber]));
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [trackingEnabled, setTrackingEnabled] = useState(customer.trackingEnabled !== false);
+
+  async function handleToggleTracking(nextVal: boolean) {
+    const previous = trackingEnabled;
+    setTrackingEnabled(nextVal);
+    setPendingAction("toggle-tracking");
+    const res = await setCustomerTrackingAction(customer.id, nextVal);
+    setPendingAction(null);
+    if (res?.error) {
+      setTrackingEnabled(previous);
+      toast.error(res.error);
+    } else {
+      toast.success(res?.success ?? `GPS Tracking ${nextVal ? "enabled" : "disabled"}.`);
+      router.refresh();
+    }
+  }
 
   async function runAction(name: string, fn: () => Promise<{ error?: string; success?: string } | undefined>) {
     setPendingAction(name);
@@ -686,7 +702,11 @@ export function CustomerDetailClient({
                       className="flex items-start justify-between gap-4 rounded-xl border border-line bg-surface p-3.5 text-sm"
                     >
                       <div>
-                        <p className="font-medium text-text-primary">{a.action.replace(/_/g, " ")}</p>
+                        <p className="font-medium text-text-primary">
+                          {a.action === "FEATURE_TRACKING_CHANGED" && typeof a.meta.trackingEnabled === "boolean"
+                            ? `GPS Vessel Tracking turned ${a.meta.trackingEnabled ? "ON" : "OFF"}`
+                            : a.action.replace(/_/g, " ")}
+                        </p>
                         <p className="text-xs text-text-muted">by {a.actorName}</p>
                       </div>
                       <span className="whitespace-nowrap text-xs text-text-muted">{formatDateTime(a.createdAt)}</span>
@@ -713,19 +733,13 @@ export function CustomerDetailClient({
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-semibold ${customer.trackingEnabled !== false ? "text-accent-green" : "text-text-muted"}`}>
-                          {customer.trackingEnabled !== false ? "ENABLED" : "DISABLED"}
+                        <span className={`text-xs font-semibold ${trackingEnabled ? "text-accent-green" : "text-text-muted"}`}>
+                          {trackingEnabled ? "ENABLED" : "DISABLED"}
                         </span>
                         <Switch
-                          checked={customer.trackingEnabled !== false}
+                          checked={trackingEnabled}
                           disabled={pendingAction === "toggle-tracking"}
-                          onChange={(checked) =>
-                            runAction("toggle-tracking", async () => {
-                              const res = await setCustomerTrackingAction(customer.id, checked);
-                              if (res?.error) return { error: res.error };
-                              return { success: res?.success ?? "Feature updated." };
-                            })
-                          }
+                          onChange={handleToggleTracking}
                         />
                       </div>
                     </div>

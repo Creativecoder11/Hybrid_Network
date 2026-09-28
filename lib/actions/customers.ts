@@ -298,6 +298,7 @@ export async function updateCustomerAction(
   customer.service = data.service ?? customer.service;
   customer.vendor = data.vendor ?? customer.vendor;
   customer.starlinkVesselId = data.starlinkVesselId ?? customer.starlinkVesselId;
+  const trackingBefore = customer.trackingEnabled !== false;
   if (data.trackingEnabled !== undefined) {
     customer.trackingEnabled = data.trackingEnabled;
   }
@@ -315,6 +316,15 @@ export async function updateCustomerAction(
   }
 
   await customer.save();
+
+  if (data.trackingEnabled !== undefined && data.trackingEnabled !== trackingBefore) {
+    await ActivityLog.create({
+      actor: admin.id,
+      targetCustomer: customer._id,
+      action: "FEATURE_TRACKING_CHANGED",
+      meta: { from: trackingBefore, to: data.trackingEnabled, trackingEnabled: data.trackingEnabled },
+    });
+  }
 
   // Keep additional portal users' company label in step with the profile.
   await User.updateMany({ customerProfile: customer._id }, { $set: { company: customer.company } });
@@ -435,6 +445,7 @@ export async function updateCustomerAction(
 
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${id}`);
+  revalidatePath("/portal", "layout");
   return { success: "Customer updated." };
 }
 
@@ -630,21 +641,24 @@ export async function setCustomerTrackingAction(
   if (!mongoose.isValidObjectId(customerId)) return { error: "Invalid customer ID." };
 
   await connectDB();
-  const customer = await User.findOne({ _id: customerId, ...CUSTOMER_PROFILE_FILTER });
-  if (!customer) return { error: "Customer not found." };
-
-  customer.trackingEnabled = enabled;
-  await customer.save();
+  const before = await User.findOneAndUpdate(
+    { _id: customerId, ...CUSTOMER_PROFILE_FILTER },
+    { $set: { trackingEnabled: Boolean(enabled) } },
+    { returnDocument: "before" }
+  )
+    .select("name trackingEnabled")
+    .lean();
+  if (!before) return { error: "Customer not found." };
 
   await ActivityLog.create({
     actor: admin.id,
-    targetCustomer: customer._id,
-    action: enabled ? "CUSTOMER_TRACKING_ENABLED" : "CUSTOMER_TRACKING_DISABLED",
-    meta: { trackingEnabled: enabled },
+    targetCustomer: before._id,
+    action: "FEATURE_TRACKING_CHANGED",
+    meta: { from: before.trackingEnabled !== false, to: Boolean(enabled), trackingEnabled: Boolean(enabled) },
   });
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
-  revalidatePath("/portal");
-  return { success: `Tracking feature ${enabled ? "enabled" : "disabled"} for ${customer.name}.` };
+  revalidatePath("/portal", "layout");
+  return { success: `GPS Vessel Tracking ${enabled ? "enabled" : "disabled"} for ${before.name}.` };
 }

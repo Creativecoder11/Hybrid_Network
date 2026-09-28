@@ -70,7 +70,7 @@ async function buildContext(user: CurrentUser, requestedAccountId?: string | nul
   await connectDB();
   const [accounts, profileDoc, features, cookieStore] = await Promise.all([
     listAuthorizedAccounts(user),
-    User.findById(user.customerProfileId).select("name company customerId email address phone").lean(),
+    User.findById(user.customerProfileId).select("name company customerId email address phone trackingEnabled").lean(),
     getFeatureFlags(),
     cookies(),
   ]);
@@ -95,7 +95,9 @@ async function buildContext(user: CurrentUser, requestedAccountId?: string | nul
     },
     accounts,
     account,
-    features,
+    // Global Super Admin flags, narrowed by the per-customer GPS Vessel
+    // Tracking toggle (Admin -> Customer -> Customer Portal Features).
+    features: { ...features, tracking: features.tracking && profileDoc?.trackingEnabled !== false },
   };
 }
 
