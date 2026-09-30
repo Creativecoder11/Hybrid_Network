@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { adminCreateTicketAction } from "@/lib/actions/support";
 import type { ActionState } from "@/lib/actions/customers";
 import type { TicketCustomerOption } from "@/lib/types/support";
+import { PRIORITY_LABEL, TICKET_PRIORITIES } from "@/lib/support/priority";
 
 function customerLabel(c: TicketCustomerOption): string {
   return c.company && c.company !== c.name ? `${c.name} — ${c.company}` : c.name;
@@ -116,7 +117,17 @@ export function AdminNewTicketModal({
           <Input name="subject" required minLength={3} placeholder="Brief summary of the issue" />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <Label>Priority</Label>
+            <Select name="priority" defaultValue="NORMAL">
+              {TICKET_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_LABEL[p]}
+                </option>
+              ))}
+            </Select>
+          </div>
           <div>
             <Label>Category</Label>
             <Select name="category" defaultValue="GENERAL">

@@ -5,6 +5,7 @@ export type TicketRow = {
   customerName: string;
   customerCode: string;
   category: "BILLING" | "TECHNICAL" | "SERVICE" | "GENERAL";
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   subject: string;
   status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
   replyCount: number;

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { AdminNewTicketModal } from "@/components/admin/AdminNewTicketModal";
 import { assignTicketAction } from "@/lib/actions/support";
 import type { AgentOption, TicketCustomerOption, TicketRow, TicketStats } from "@/lib/types/support";
+import { PRIORITY_LABEL, PRIORITY_TONE } from "@/lib/support/priority";
 
 const CATEGORY_LABEL: Record<TicketRow["category"], string> = {
   BILLING: "Billing",
@@ -205,6 +206,7 @@ export function AdminSupportClient({
                   <TH>Ticket</TH>
                   <TH>Customer Name</TH>
                   <TH>Category</TH>
+                  <TH>Priority</TH>
                   <TH>Status</TH>
                   <TH>Assigned To</TH>
                   <TH className="text-right">Action</TH>
@@ -228,6 +230,9 @@ export function AdminSupportClient({
                     </TD>
                     <TD>
                       <Badge tone="neutral">{CATEGORY_LABEL[t.category]}</Badge>
+                    </TD>
+                    <TD>
+                      <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
                     </TD>
                     <TD>
                       <StatusBadge status={t.status} />

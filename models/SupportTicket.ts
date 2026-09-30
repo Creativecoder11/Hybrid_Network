@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+import { TICKET_PRIORITIES } from "@/lib/support/priority";
 
 export const TICKET_STATUSES = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
@@ -23,6 +24,7 @@ const SupportTicketSchema = new Schema(
     message: { type: String, required: true },
     status: { type: String, enum: TICKET_STATUSES, default: "OPEN" },
     category: { type: String, enum: TICKET_CATEGORIES, default: "GENERAL" },
+    priority: { type: String, enum: TICKET_PRIORITIES, default: "NORMAL" },
     assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
     // Set when an admin opens the ticket on the customer's behalf; null when
     // the customer raised it from the portal.

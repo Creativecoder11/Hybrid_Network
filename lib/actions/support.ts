@@ -12,6 +12,7 @@ import { generateTicketNumber } from "@/lib/utils/ids";
 import {
   createTicketSchema,
   adminCreateTicketSchema,
+  updateTicketPrioritySchema,
   replyTicketSchema,
   updateTicketStatusSchema,
   assignTicketSchema,
@@ -79,6 +80,7 @@ export async function adminCreateTicketAction(
     message: str(formData, "message"),
     category: str(formData, "category") || undefined,
     status: str(formData, "status") || undefined,
+    priority: str(formData, "priority") || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
@@ -98,6 +100,7 @@ export async function adminCreateTicketAction(
     message: parsed.data.message,
     category: parsed.data.category,
     status: parsed.data.status,
+    priority: parsed.data.priority,
     createdBy: admin.id,
     // Raised by staff, so there's nothing new for the admin team to read.
     adminUnread: false,
@@ -219,4 +222,23 @@ export async function assignTicketAction(
   revalidatePath(`/admin/support/${ticketId}`);
   revalidatePath("/admin/support");
   return { success: "Ticket assigned." };
+}
+
+export async function updateTicketPriorityAction(
+  ticketId: string,
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"
+): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  const parsed = updateTicketPrioritySchema.safeParse({ ticketId, priority });
+  if (!parsed.success || !isValidObjectId(parsed.data.ticketId)) return { error: "Invalid priority." };
+
+  await connectDB();
+  const ticket = await SupportTicket.findByIdAndUpdate(parsed.data.ticketId, { priority: parsed.data.priority });
+  if (!ticket) return { error: "Ticket not found." };
+
+  revalidatePath(`/admin/support/${parsed.data.ticketId}`);
+  revalidatePath("/admin/support");
+  return { success: "Priority updated." };
 }

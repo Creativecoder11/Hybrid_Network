@@ -6,6 +6,7 @@ import { CustomerAccount } from "@/models/CustomerAccount";
 import { getSupportTicketStats } from "@/lib/support/ticketStats";
 import { AdminSupportClient } from "@/components/admin/AdminSupportClient";
 import type { AgentOption, TicketCustomerOption, TicketRow } from "@/lib/types/support";
+import { ticketPriority } from "@/lib/support/priority";
 
 export const metadata: Metadata = {
   title: "Support | Hybrid Networks Admin",
@@ -52,6 +53,7 @@ export default async function AdminSupportPage({
       customerName: customer?.name ?? "Unknown",
       customerCode: customer?.customerCode ?? "",
       category: t.category ?? "GENERAL",
+    priority: ticketPriority(t.priority),
       subject: t.subject,
       status: t.status,
       replyCount: t.replies?.length ?? 0,
