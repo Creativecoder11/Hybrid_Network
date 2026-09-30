@@ -7,6 +7,12 @@ export const createTicketSchema = z.object({
 });
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 
+/** Admin opening a ticket on a customer's behalf. */
+export const adminCreateTicketSchema = createTicketSchema.extend({
+  customerId: z.string().min(1, "Select a customer"),
+  status: z.enum(["OPEN", "IN_PROGRESS"]).optional().default("OPEN"),
+});
+
 export const replyTicketSchema = z.object({
   ticketId: z.string().min(1),
   message: z.string().min(1, "Reply cannot be empty"),

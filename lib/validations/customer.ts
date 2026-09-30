@@ -25,7 +25,7 @@ export const createCustomerSchema = z.object({
     message: "Account type is required",
   }),
   contactPerson: z.string().optional().default(""),
-  nidTradeLicense: z.string().trim().min(1, "NID / Trade License is required"),
+  nidTradeLicense: z.string().trim().min(1, "NID / Trade License number is required"),
   // Customer Account numbers (required, at least 1).
   accountNumbers: z
     .array(accountNumberField)
@@ -50,6 +50,9 @@ export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 export const updateCustomerSchema = createCustomerSchema.extend({
   id: z.string().min(1),
   status: z.enum(["ACTIVE", "SUSPENDED", "INVITED"]).optional(),
+  // Required for new customers only: existing customers without a Starlink
+  // vessel (older or non-Starlink services) must still be editable.
+  starlinkVesselId: z.string().trim().optional().default(""),
 });
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 

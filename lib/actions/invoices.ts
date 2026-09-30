@@ -19,6 +19,7 @@ import { roundCurrency } from "@/lib/billing/money";
 import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
 import { renderInvoicePdf } from "@/lib/pdf/render";
 import { sendMail } from "@/lib/email/mailer";
+import { customerPortalBaseUrl } from "@/lib/utils/portalUrls";
 import { invoiceEmailHtml, invoiceReminderEmailHtml } from "@/emails/templates";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { createInvoiceSchema, markPaidSchema, updateInvoiceSchema } from "@/lib/validations/invoice";
@@ -153,7 +154,7 @@ export async function createInvoiceAction(
     const pdfData = await buildInvoicePdfData(invoice._id.toString());
     if (pdfData) {
       const pdfBuffer = await renderInvoicePdf(pdfData);
-      const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoice._id.toString()}`;
+      const portalUrl = `${customerPortalBaseUrl()}/portal/bills/${invoice._id.toString()}`;
 
       const mail = await sendMail({
         to: customer.email,
@@ -165,7 +166,7 @@ export async function createInvoiceAction(
           dueDate: formatDate(invoice.dueDate),
           portalUrl,
         }),
-        attachments: [{ filename: `${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
+        attachments: [{ filename: `invoice-${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
       });
 
       invoice.sentAt = new Date();
@@ -211,27 +212,48 @@ export async function sendInvoiceAction(invoiceId: string): Promise<ActionState>
     return { error: `This invoice is already ${invoice.status.toLowerCase()}.` };
   }
 
+  // A double click (or a retry while the first send is in flight) shouldn't
+  // email the customer twice.
+  if (invoice.sentAt && Date.now() - invoice.sentAt.getTime() < 60_000) {
+    return { error: "This invoice was sent less than a minute ago." };
+  }
+
   const customer = await User.findById(invoice.customer);
   if (!customer) return { error: "Customer not found." };
+  if (!customer.email) return { error: "This customer has no email address on file." };
 
-  const pdfData = await buildInvoicePdfData(invoiceId);
-  if (!pdfData) return { error: "Could not build the invoice PDF." };
+  let pdfBuffer: Buffer;
+  try {
+    const pdfData = await buildInvoicePdfData(invoiceId);
+    if (!pdfData) return { error: "Could not build the invoice PDF." };
+    pdfBuffer = await renderInvoicePdf(pdfData);
+  } catch (err) {
+    console.error(`[invoices] PDF generation failed for ${invoice.invoiceNumber}:`, err);
+    return { error: "The invoice PDF could not be generated, so the invoice was not sent." };
+  }
 
-  const pdfBuffer = await renderInvoicePdf(pdfData);
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/bills/${invoiceId}`;
-
-  await sendMail({
-    to: customer.email,
-    subject: `Invoice ${invoice.invoiceNumber} from Hybrid Networks`,
-    html: invoiceEmailHtml({
-      name: customer.name,
-      invoiceNumber: invoice.invoiceNumber,
-      amount: formatCurrency(invoice.total, invoice.currency),
-      dueDate: formatDate(invoice.dueDate),
-      portalUrl,
-    }),
-    attachments: [{ filename: `${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
-  });
+  const portalUrl = `${customerPortalBaseUrl()}/portal/bills/${invoiceId}`;
+  let mail: Awaited<ReturnType<typeof sendMail>>;
+  try {
+    mail = await sendMail({
+      to: customer.email,
+      subject: `Invoice ${invoice.invoiceNumber} from Hybrid Networks`,
+      html: invoiceEmailHtml({
+        name: customer.name,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: formatCurrency(invoice.total, invoice.currency),
+        dueDate: formatDate(invoice.dueDate),
+        portalUrl,
+      }),
+      attachments: [{ filename: `invoice-${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
+    });
+  } catch (err) {
+    console.error(`[invoices] email send failed for ${invoice.invoiceNumber} to ${customer.email}:`, err);
+    return { error: "The email could not be sent. Check the SMTP settings and try again." };
+  }
+  if (!mail.delivered) {
+    return { error: "Email (SMTP) isn't configured on this server, so the invoice was not sent." };
+  }
 
   invoice.status = invoice.dueDate.getTime() < Date.now() ? "OVERDUE" : "DUE";
   invoice.sentAt = new Date();
@@ -464,7 +486,7 @@ export async function bulkSendRemindersAction(invoiceIds: string[]): Promise<Act
     const customer = await User.findById(invoice.customer);
     if (!customer) continue;
 
-    const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoice._id.toString()}`;
+    const portalUrl = `${customerPortalBaseUrl()}/portal/bills/${invoice._id.toString()}`;
     await sendMail({
       to: customer.email,
       subject: `Payment reminder: Invoice ${invoice.invoiceNumber}`,

@@ -55,6 +55,7 @@ import type {
   PortalUserRow,
   UsageHistoryRow,
 } from "@/lib/types/admin";
+import { identityDocumentLabel } from "@/lib/utils/identityDocument";
 
 const STATUS_LABEL: Record<CustomerDetail["status"], string> = {
   ACTIVE: "Active",
@@ -219,7 +220,7 @@ export function CustomerDetailClient({
                     </p>
                     <InfoRow label="Account Type" value={customer.accountType?.replace(/_/g, " / ")} />
                     <InfoRow label="Contact Person" value={customer.contactPerson} />
-                    <InfoRow label="NID / Trade License" value={customer.nidTradeLicense} />
+                    <InfoRow label={identityDocumentLabel(customer.accountType)} value={customer.nidTradeLicense} />
                     <InfoRow label="Phone" value={customer.phone} />
                     <InfoRow label="Address" value={customer.address} />
                     <InfoRow label="Company" value={customer.company} />

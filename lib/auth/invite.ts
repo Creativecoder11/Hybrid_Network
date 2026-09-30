@@ -4,6 +4,7 @@ import { generateRawToken, hashToken, INVITE_TOKEN_TTL_MS } from "@/lib/auth/tok
 import { sendMail } from "@/lib/email/mailer";
 import { inviteEmailHtml } from "@/emails/templates";
 import type { UserDoc } from "@/models/User";
+import { adminPortalBaseUrl, customerPortalBaseUrl } from "@/lib/utils/portalUrls";
 
 /**
  * Generates a fresh invite token for a user, stores its hash, flips status
@@ -20,11 +21,7 @@ export async function issueInvite(
   user.status = "INVITED";
   await user.save();
 
-  const baseUrl = (
-    options?.isTeamInvite
-      ? (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-      : (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-  ).replace(/\/+$/, "");
+  const baseUrl = options?.isTeamInvite ? adminPortalBaseUrl() : customerPortalBaseUrl();
   const actionUrl = `${baseUrl}/set-password/${rawToken}`;
 
   await sendMail({

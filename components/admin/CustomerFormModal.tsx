@@ -13,6 +13,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { createCustomerAction, updateCustomerAction, type ActionState } from "@/lib/actions/customers";
 import { formatCurrency } from "@/lib/utils/format";
 import type { CustomerRow, PlanOption } from "@/lib/types/admin";
+import { IDENTITY_DOCUMENT_HELP, identityDocumentLabel } from "@/lib/utils/identityDocument";
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
@@ -53,6 +54,7 @@ export function CustomerFormModal({
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(action, undefined);
   const [status, setStatus] = useState<"ACTIVE" | "SUSPENDED" | "INVITED">(customer?.status ?? "ACTIVE");
   const [planId, setPlanId] = useState(customer?.planId ?? "");
+  const [accountType, setAccountType] = useState<string>(customer?.accountType ?? "");
   const [trackingEnabled, setTrackingEnabled] = useState(customer?.trackingEnabled !== false);
 
   useEffect(() => {
@@ -198,7 +200,8 @@ export function CustomerFormModal({
                 options={[
                   { label: "Active", value: "ACTIVE", tone: "green" },
                   { label: "Suspended", value: "SUSPENDED", tone: "amber" },
-                  { label: "Invited", value: "INVITED", tone: "red" },
+                  // Only an invitation puts a customer into Invited.
+                  ...(customer?.status === "INVITED" ? [{ label: "Invited", value: "INVITED" as const, tone: "red" as const }] : []),
                 ]}
               />
             </div>
@@ -217,7 +220,7 @@ export function CustomerFormModal({
             <Input name="phone" defaultValue={customer?.phone} required />
           </Field>
           <Field label="Account Type" required>
-            <Select name="accountType" defaultValue={customer?.accountType ?? ""} required>
+            <Select name="accountType" value={accountType} onChange={(e) => setAccountType(e.target.value)} required>
               <option value="">-- Select Account Type --</option>
               <option value="BUSINESS_ENTERPRISE">Business / Enterprise</option>
               <option value="INDIVIDUAL">Individual</option>
@@ -227,8 +230,9 @@ export function CustomerFormModal({
           <Field label="Contact Person">
             <Input name="contactPerson" defaultValue={customer?.contactPerson} />
           </Field>
-          <Field label="NID / Trade License" required>
+          <Field label={identityDocumentLabel(accountType)} required>
             <Input name="nidTradeLicense" defaultValue={customer?.nidTradeLicense} required />
+            <p className="mt-1 text-[11px] text-text-muted">{IDENTITY_DOCUMENT_HELP}</p>
           </Field>
           <Field label="Card Name">
             <Input name="cardName" defaultValue={customer?.cardName} placeholder="e.g. NI-APAC_SUPPORT" />
@@ -277,12 +281,12 @@ export function CustomerFormModal({
               />
             </Field>
           </div>
-          <Field label="Starlink Vessel ID (first account)" required>
+          <Field label="Starlink Vessel ID (first account)" required={mode === "create"}>
             <Input
               name="starlinkVesselId"
               defaultValue={customer?.starlinkVesselId ?? ""}
               placeholder="e.g. 019ff593-6557-785c-ac33-36d11b7f301c"
-              required
+              required={mode === "create"}
             />
           </Field>
           <Field label="Service Plan (first account)" required>

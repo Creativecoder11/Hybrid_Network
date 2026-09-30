@@ -34,6 +34,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateBillModal } from "@/components/admin/CreateBillModal";
 import { EditBillModal } from "@/components/admin/EditBillModal";
 import { MarkPaidModal } from "@/components/admin/MarkPaidModal";
+import { InvoicePdfButton } from "@/components/admin/InvoicePdfButton";
 import { BillingTrashView } from "@/components/admin/BillingTrashView";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import {
@@ -480,15 +481,7 @@ export function BillingPageClient({
                         >
                           <Eye className="size-4" />
                         </Link>
-                        <a
-                          href={`/api/invoices/${inv.id}/pdf`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-accent-blue"
-                          aria-label="Download PDF"
-                        >
-                          <Download className="size-4" />
-                        </a>
+                        <InvoicePdfButton invoiceId={inv.id} invoiceNumber={inv.invoiceNumber} variant="icon" />
                         {inv.status !== "PAID" && (
                           <button
                             onClick={() => setEditTarget(inv)}

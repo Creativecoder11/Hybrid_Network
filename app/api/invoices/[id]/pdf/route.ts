@@ -8,7 +8,7 @@ import { CUSTOMER_VISIBLE_STATUSES } from "@/lib/portal/billing";
 import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
 import { renderInvoicePdf } from "@/lib/pdf/render";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthorizedUser();
   if (!user) {
     return NextResponse.json({ success: false, error: "Not authorized." }, { status: 401 });
@@ -39,17 +39,32 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const pdfData = await buildInvoicePdfData(id);
-  if (!pdfData) {
-    return NextResponse.json({ success: false, error: "Could not build the invoice." }, { status: 500 });
+  let pdfBuffer: Buffer;
+  try {
+    const pdfData = await buildInvoicePdfData(id);
+    if (!pdfData) {
+      console.error(`[invoice-pdf] could not build PDF data for invoice ${id} (customer record missing?)`);
+      return NextResponse.json({ success: false, error: "Could not build the invoice." }, { status: 500 });
+    }
+    pdfBuffer = await renderInvoicePdf(pdfData);
+  } catch (err) {
+    console.error(`[invoice-pdf] PDF generation failed for invoice ${id}:`, err);
+    return NextResponse.json({ success: false, error: "The invoice PDF could not be generated." }, { status: 500 });
+  }
+  if (!pdfBuffer.length) {
+    console.error(`[invoice-pdf] empty PDF rendered for invoice ${id}`);
+    return NextResponse.json({ success: false, error: "The invoice PDF could not be generated." }, { status: 500 });
   }
 
-  const pdfBuffer = await renderInvoicePdf(pdfData);
+  // ?download=1 saves the file; without it the PDF opens in the browser viewer.
+  const download = new URL(request.url).searchParams.get("download") === "1";
+  const filename = `invoice-${invoice.invoiceNumber.replace(/[^a-zA-Z0-9-_]/g, "_")}.pdf`;
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${invoice.invoiceNumber.replace(/[^a-zA-Z0-9-_]/g, "_")}.pdf"`,
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+      "Content-Length": String(pdfBuffer.length),
       "Cache-Control": "private, no-store",
     },
   });

@@ -24,6 +24,9 @@ const SupportTicketSchema = new Schema(
     status: { type: String, enum: TICKET_STATUSES, default: "OPEN" },
     category: { type: String, enum: TICKET_CATEGORIES, default: "GENERAL" },
     assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    // Set when an admin opens the ticket on the customer's behalf; null when
+    // the customer raised it from the portal.
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     resolvedAt: { type: Date, default: null },
     adminUnread: { type: Boolean, default: true },
     replies: { type: [ReplySchema], default: [] },
