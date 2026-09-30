@@ -5,7 +5,6 @@ export type TicketRow = {
   customerName: string;
   customerCode: string;
   category: "BILLING" | "TECHNICAL" | "SERVICE" | "GENERAL";
-  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   subject: string;
   status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
   replyCount: number;
@@ -16,16 +15,6 @@ export type TicketRow = {
 };
 
 export type AgentOption = { id: string; name: string };
-
-/** Customer Profile choice for the admin "Create Ticket" form. */
-export type TicketCustomerOption = {
-  id: string;
-  name: string;
-  company: string;
-  customerId: string;
-  email: string;
-  accountNumbers: string[];
-};
 
 export type TicketStats = {
   openCount: number;

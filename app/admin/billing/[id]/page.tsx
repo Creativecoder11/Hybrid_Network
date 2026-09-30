@@ -7,7 +7,6 @@ import { Subscription } from "@/models/Subscription";
 import { UsageRecord } from "@/models/UsageRecord";
 import { InvoiceDetailClient } from "@/components/admin/InvoiceDetailClient";
 import type { InvoiceDetail } from "@/lib/types/billing";
-import { RecurringInvoice } from "@/models/RecurringInvoice";
 
 const GB = 1_000_000_000;
 
@@ -37,9 +36,6 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   ]);
 
   const planName = (activeSub?.plan as unknown as { name?: string } | null)?.name ?? "--";
-  const schedule = invoice.recurringInvoice
-    ? await RecurringInvoice.findById(invoice.recurringInvoice).select("durationMonths").lean()
-    : null;
 
   const detail: InvoiceDetail = {
     id: invoice._id.toString(),
@@ -78,8 +74,6 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     paidDate: invoice.paidDate ? (invoice.paidDate as Date).toISOString() : null,
     paymentMethod: invoice.paymentMethod ?? "",
     sentAt: invoice.sentAt ? (invoice.sentAt as Date).toISOString() : null,
-    recurring:
-      schedule && invoice.recurringSequence ? { sequence: invoice.recurringSequence, of: schedule.durationMonths } : null,
   };
 
   return <InvoiceDetailClient invoice={detail} />;

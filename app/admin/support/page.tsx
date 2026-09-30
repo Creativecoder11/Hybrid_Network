@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
-import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
-import { CustomerAccount } from "@/models/CustomerAccount";
+import { User } from "@/models/User";
 import { getSupportTicketStats } from "@/lib/support/ticketStats";
 import { AdminSupportClient } from "@/components/admin/AdminSupportClient";
-import type { AgentOption, TicketCustomerOption, TicketRow } from "@/lib/types/support";
-import { ticketPriority } from "@/lib/support/priority";
+import type { AgentOption, TicketRow } from "@/lib/types/support";
 
 export const metadata: Metadata = {
   title: "Support | Hybrid Networks Admin",
@@ -31,7 +29,7 @@ export default async function AdminSupportPage({
   const sortSpec: Record<string, 1 | -1> =
     sort === "date_asc" ? { createdAt: 1 } : { createdAt: -1 };
 
-  const [tickets, stats, agents, customerProfiles, customerAccounts] = await Promise.all([
+  const [tickets, stats, agents] = await Promise.all([
     SupportTicket.find(filter)
       .sort(sortSpec)
       .populate("customer")
@@ -39,8 +37,6 @@ export default async function AdminSupportPage({
       .lean(),
     getSupportTicketStats(),
     User.find({ role: { $in: ["SUPER_ADMIN", "SUB_ADMIN"] } }).sort({ name: 1 }).lean(),
-    User.find(CUSTOMER_PROFILE_FILTER).select("name company customerId email").sort({ name: 1 }).lean(),
-    CustomerAccount.find({}).select("customer accountNumber").lean(),
   ]);
 
   let rows: TicketRow[] = tickets.map((t) => {
@@ -53,7 +49,6 @@ export default async function AdminSupportPage({
       customerName: customer?.name ?? "Unknown",
       customerCode: customer?.customerCode ?? "",
       category: t.category ?? "GENERAL",
-    priority: ticketPriority(t.priority),
       subject: t.subject,
       status: t.status,
       replyCount: t.replies?.length ?? 0,
@@ -80,20 +75,6 @@ export default async function AdminSupportPage({
 
   const agentOptions: AgentOption[] = agents.map((a) => ({ id: a._id.toString(), name: a.name }));
 
-  const accountNumbersByCustomer = new Map<string, string[]>();
-  for (const acc of customerAccounts) {
-    const key = acc.customer.toString();
-    accountNumbersByCustomer.set(key, [...(accountNumbersByCustomer.get(key) ?? []), acc.accountNumber]);
-  }
-  const customerOptions: TicketCustomerOption[] = customerProfiles.map((c) => ({
-    id: c._id.toString(),
-    name: c.name ?? "",
-    company: c.company ?? "",
-    customerId: c.customerId ?? "",
-    email: c.email,
-    accountNumbers: accountNumbersByCustomer.get(c._id.toString()) ?? [],
-  }));
-
   return (
     <AdminSupportClient
       tickets={paged}
@@ -105,7 +86,6 @@ export default async function AdminSupportPage({
       sort={sort}
       stats={stats}
       agents={agentOptions}
-      customers={customerOptions}
     />
   );
 }

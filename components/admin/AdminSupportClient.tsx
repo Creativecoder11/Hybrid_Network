@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { LifeBuoy, Search, Eye, Ticket, Clock, CheckCircle2, XCircle, Plus } from "lucide-react";
+import { LifeBuoy, Search, Eye, Ticket, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -14,11 +14,8 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Button } from "@/components/ui/Button";
-import { AdminNewTicketModal } from "@/components/admin/AdminNewTicketModal";
 import { assignTicketAction } from "@/lib/actions/support";
-import type { AgentOption, TicketCustomerOption, TicketRow, TicketStats } from "@/lib/types/support";
-import { PRIORITY_LABEL, PRIORITY_TONE } from "@/lib/support/priority";
+import type { AgentOption, TicketRow, TicketStats } from "@/lib/types/support";
 
 const CATEGORY_LABEL: Record<TicketRow["category"], string> = {
   BILLING: "Billing",
@@ -37,7 +34,6 @@ export function AdminSupportClient({
   sort,
   stats,
   agents,
-  customers,
 }: {
   tickets: TicketRow[];
   total: number;
@@ -48,7 +44,6 @@ export function AdminSupportClient({
   sort: string;
   stats: TicketStats;
   agents: AgentOption[];
-  customers: TicketCustomerOption[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,7 +52,6 @@ export function AdminSupportClient({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [assigning, setAssigning] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState(q);
-  const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function updateParams(next: Record<string, string | number>) {
@@ -107,18 +101,10 @@ export function AdminSupportClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-2xl font-bold text-text-primary">Support tickets</p>
-          <p className="text-sm text-text-muted">View, search, and manage all customer accounts.</p>
-        </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" />
-          Create Ticket
-        </Button>
+      <div>
+        <p className="text-2xl font-bold text-text-primary">Support tickets</p>
+        <p className="text-sm text-text-muted">View, search, and manage all customer accounts.</p>
       </div>
-
-      {creating && <AdminNewTicketModal customers={customers} onClose={() => setCreating(false)} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -206,7 +192,6 @@ export function AdminSupportClient({
                   <TH>Ticket</TH>
                   <TH>Customer Name</TH>
                   <TH>Category</TH>
-                  <TH>Priority</TH>
                   <TH>Status</TH>
                   <TH>Assigned To</TH>
                   <TH className="text-right">Action</TH>
@@ -230,9 +215,6 @@ export function AdminSupportClient({
                     </TD>
                     <TD>
                       <Badge tone="neutral">{CATEGORY_LABEL[t.category]}</Badge>
-                    </TD>
-                    <TD>
-                      <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
                     </TD>
                     <TD>
                       <StatusBadge status={t.status} />

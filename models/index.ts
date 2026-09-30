@@ -11,7 +11,6 @@ export * from "./CdrIdentifierMapping";
 export * from "./CdrImportBatch";
 export * from "./CdrChargeRecord";
 export * from "./Invoice";
-export * from "./RecurringInvoice";
 export * from "./SupportTicket";
 export * from "./ActivityLog";
 export * from "./Settings";

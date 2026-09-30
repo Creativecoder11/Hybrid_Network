@@ -4,7 +4,6 @@ import { SupportTicket } from "@/models/SupportTicket";
 import { requireRole } from "@/lib/auth/dal";
 import { PortalSupportClient } from "@/components/portal/PortalSupportClient";
 import type { TicketRow } from "@/lib/types/support";
-import { ticketPriority } from "@/lib/support/priority";
 
 export const metadata: Metadata = {
   title: "Support | Hybrid Networks Portal",
@@ -23,7 +22,6 @@ export default async function PortalSupportPage() {
     customerName: user.name,
     customerCode: "",
     category: t.category ?? "GENERAL",
-    priority: ticketPriority(t.priority),
     subject: t.subject,
     status: t.status,
     replyCount: t.replies?.length ?? 0,

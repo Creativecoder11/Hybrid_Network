@@ -222,11 +222,6 @@ build's pages.
 - **Login redirects loop or fails silently** — almost always the SSL/
   `secure` cookie issue from §7, or `JWT_SECRET` differing between the two
   apps after a manual edit.
-- **Customers get the invitation email but can't sign in** — the admin app
-  sends customer emails, so it needs `CUSTOMER_PORTAL_URL` set to the
-  customer site (e.g. `https://login.hybridnetworks.net.au`). Without it,
-  links can point at the admin site, where customer logins are refused.
-  After setting it, restart the app and re-send the invitation.
 - **Images look soft / a build warning mentions `sharp`** — optional, but
   `npm install sharp` on each app improves `next/image` output quality in
   a self-hosted (non-Vercel) deployment. Not required to function.
@@ -241,26 +236,6 @@ build's pages.
   chunks the new build no longer contains. Purge the CDN cache (§9) and
   Restart the app. Pages are served with `no-store` now, so this only
   happens for copies cached before that change was deployed.
-
-## Recurring invoices (daily cron)
-
-Admin → Billing → **Recurring** sets up monthly schedules (1–36 months).
-Each month a **draft** invoice is created for an admin to review and send.
-Drafts are created by `GET /api/cron/recurring-invoices`, which is disabled
-until `CRON_SECRET` is set. Admins can also click **Generate due invoices
-now** on the Recurring page at any time.
-
-1. On the **admin** app only, add an env var `CRON_SECRET` with a long random
-   value (e.g. the output of `openssl rand -hex 32`) and restart the app.
-2. In hPanel → **Advanced → Cron Jobs**, add a daily job (e.g. 06:00):
-
-   ```
-   curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://admin.hybridnetworks.net.au/api/cron/recurring-invoices
-   ```
-
-The endpoint is safe to call more than once a day: each schedule month is
-created at most once. If the job didn't run for a few days, the next run
-creates the missed months (one draft each).
 
 ## Data migrations (multi-account release)
 

@@ -1,18 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { isValidObjectId } from "mongoose";
 import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
-import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
 import { ActivityLog } from "@/models/ActivityLog";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateTicketNumber } from "@/lib/utils/ids";
 import {
   createTicketSchema,
-  adminCreateTicketSchema,
-  updateTicketPrioritySchema,
   replyTicketSchema,
   updateTicketStatusSchema,
   assignTicketSchema,
@@ -64,58 +59,6 @@ export async function createTicketAction(
   revalidatePath("/portal/support");
   revalidatePath("/admin/support");
   return { success: `Ticket ${ticketNumber} submitted. We'll get back to you soon.` };
-}
-
-/** Admin opens a ticket on behalf of a customer; it shows in their portal like any other. */
-export async function adminCreateTicketAction(
-  _prevState: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
-  if (!admin) return { error: "You're not authorized to perform this action." };
-
-  const parsed = adminCreateTicketSchema.safeParse({
-    customerId: str(formData, "customerId"),
-    subject: str(formData, "subject"),
-    message: str(formData, "message"),
-    category: str(formData, "category") || undefined,
-    status: str(formData, "status") || undefined,
-    priority: str(formData, "priority") || undefined,
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
-  }
-  if (!isValidObjectId(parsed.data.customerId)) return { error: "Select a customer." };
-
-  await connectDB();
-  // Tickets belong to the Customer Profile (not an additional portal user), matching the portal.
-  const customer = await User.findOne({ _id: parsed.data.customerId, ...CUSTOMER_PROFILE_FILTER }).select("_id").lean();
-  if (!customer) return { error: "Customer not found." };
-
-  const ticketNumber = await generateTicketNumber();
-  const ticket = await SupportTicket.create({
-    ticketNumber,
-    customer: customer._id,
-    subject: parsed.data.subject,
-    message: parsed.data.message,
-    category: parsed.data.category,
-    status: parsed.data.status,
-    priority: parsed.data.priority,
-    createdBy: admin.id,
-    // Raised by staff, so there's nothing new for the admin team to read.
-    adminUnread: false,
-  });
-
-  await ActivityLog.create({
-    actor: admin.id,
-    targetCustomer: customer._id,
-    action: "TICKET_CREATED",
-    meta: { ticketNumber, createdByAdmin: true },
-  });
-
-  revalidatePath("/admin/support");
-  revalidatePath("/portal/support");
-  redirect(`/admin/support/${ticket._id.toString()}`);
 }
 
 export async function replyTicketAction(
@@ -222,23 +165,4 @@ export async function assignTicketAction(
   revalidatePath(`/admin/support/${ticketId}`);
   revalidatePath("/admin/support");
   return { success: "Ticket assigned." };
-}
-
-export async function updateTicketPriorityAction(
-  ticketId: string,
-  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT"
-): Promise<ActionState> {
-  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
-  if (!admin) return { error: "You're not authorized to perform this action." };
-
-  const parsed = updateTicketPrioritySchema.safeParse({ ticketId, priority });
-  if (!parsed.success || !isValidObjectId(parsed.data.ticketId)) return { error: "Invalid priority." };
-
-  await connectDB();
-  const ticket = await SupportTicket.findByIdAndUpdate(parsed.data.ticketId, { priority: parsed.data.priority });
-  if (!ticket) return { error: "Ticket not found." };
-
-  revalidatePath(`/admin/support/${parsed.data.ticketId}`);
-  revalidatePath("/admin/support");
-  return { success: "Priority updated." };
 }

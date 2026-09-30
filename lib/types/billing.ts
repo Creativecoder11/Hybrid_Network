@@ -42,8 +42,6 @@ export type InvoiceDetail = InvoiceListRow & {
   paidDate: string | null;
   paymentMethod: string;
   sentAt: string | null;
-  /** Set when generated from a recurring schedule. */
-  recurring: { sequence: number; of: number } | null;
 };
 
 export type TrashedInvoiceRow = {
@@ -83,36 +81,4 @@ export type BillingStats = {
   overdueCount: number;
   cycleLabel: string;
   cycleDaysLeft: number;
-};
-
-/** A Customer Account a recurring invoice can be set up for. */
-export type RecurringAccountOption = {
-  accountId: string;
-  accountNumber: string;
-  customerName: string;
-  planName: string;
-  planMonthlyPrice: number | null;
-  currency: string;
-};
-
-export type RecurringInvoiceRow = {
-  id: string;
-  customerId: string;
-  customerName: string;
-  accountNumber: string;
-  lineItems: { description: string; quantity: number; unit: string; unitPrice: number; amount: number }[];
-  subtotal: number;
-  taxRate: number;
-  taxLabel: string;
-  totalPerInvoice: number;
-  currency: string;
-  startDate: string;
-  endDate: string;
-  durationMonths: number;
-  dueDays: number;
-  invoicesGenerated: number;
-  nextInvoiceDate: string | null;
-  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED";
-  notes: string;
-  invoices: { id: string; invoiceNumber: string; sequence: number; status: string }[];
 };

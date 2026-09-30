@@ -6,10 +6,8 @@ import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
 import { TicketThread } from "@/components/support/TicketThread";
 import { AdminTicketStatusControl } from "@/components/admin/AdminTicketStatusControl";
-import { AdminTicketPriorityControl } from "@/components/admin/AdminTicketPriorityControl";
 import { markTicketRead } from "@/lib/support/unread";
 import type { TicketDetail } from "@/lib/types/support";
-import { ticketPriority } from "@/lib/support/priority";
 
 export const metadata: Metadata = {
   title: "Support Ticket | Hybrid Networks Admin",
@@ -40,7 +38,6 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
     customerName: customer?.name ?? "Unknown",
     customerCode: customer?.customerCode ?? "",
     category: ticket.category ?? "GENERAL",
-    priority: ticketPriority(ticket.priority),
     subject: ticket.subject,
     status: ticket.status,
     message: ticket.message,
@@ -71,12 +68,7 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
       </Link>
       <TicketThread
         ticket={detail}
-        headerExtra={
-          <div className="flex items-center gap-2">
-            <AdminTicketPriorityControl ticketId={detail.id} priority={detail.priority} />
-            <AdminTicketStatusControl ticketId={detail.id} status={detail.status} />
-          </div>
-        }
+        headerExtra={<AdminTicketStatusControl ticketId={detail.id} status={detail.status} />}
       />
     </div>
   );

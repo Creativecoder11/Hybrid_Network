@@ -258,11 +258,6 @@ export async function updateCustomerAction(
   const customer = await User.findOne({ _id: id, ...CUSTOMER_PROFILE_FILTER });
   if (!customer) return { error: "Customer not found." };
 
-  // INVITED is set by sending an invitation, not by the status control.
-  if (data.status === "INVITED" && customer.status !== "INVITED") {
-    return { error: "A customer can't be moved back to Invited. Use “Re-send Invitation” or suspend the customer instead." };
-  }
-
   if (data.email && data.email.toLowerCase() !== customer.email) {
     const emailTaken = await User.exists({ email: data.email.toLowerCase(), _id: { $ne: id } });
     if (emailTaken) return { error: "Another user already uses this email." };
@@ -312,11 +307,12 @@ export async function updateCustomerAction(
   }
   if (data.network) customer.network = data.network;
 
-  // Activating an invited customer keeps mustChangePassword, so sign-in still
-  // requires the (unexpired) temporary password and a new password is set on
-  // first login — the status change doesn't skip onboarding.
-  if (data.status && data.status !== "INVITED") {
+  // The status pills never resurrect an INVITED login into ACTIVE (that only
+  // happens when the customer completes the first-login password change).
+  if (data.status && data.status !== "INVITED" && customer.status !== "INVITED") {
     customer.status = data.status;
+  } else if (data.status === "SUSPENDED") {
+    customer.status = "SUSPENDED";
   }
 
   await customer.save();

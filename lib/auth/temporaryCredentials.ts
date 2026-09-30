@@ -9,7 +9,6 @@ import { hashPassword } from "@/lib/auth/password";
 import { sendMail } from "@/lib/email/mailer";
 import { temporaryCredentialsEmailHtml } from "@/emails/templates";
 import { formatDateTime } from "@/lib/utils/format";
-import { customerPortalBaseUrl } from "@/lib/utils/portalUrls";
 
 // Customer invitation workflow:
 //   admin creates the portal user -> sendCustomerInvitation() generates a
@@ -84,7 +83,7 @@ export async function sendCustomerInvitation(
     await user.save();
 
     const profile = user.customerProfile ? await User.findById(user.customerProfile).select("company name customerId").lean() : null;
-    const portalBase = customerPortalBaseUrl();
+    const portalBase = (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "https://login.hybridnetworks.net.au").replace(/\/+$/, "");
     const portalUrl = portalBase.endsWith("/login") ? portalBase : `${portalBase}/login`;
 
     const mail = await sendMail({

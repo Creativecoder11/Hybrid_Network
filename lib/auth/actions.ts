@@ -9,7 +9,6 @@ import { createSession, deleteSession, getSession } from "@/lib/auth/session";
 import { generateRawToken, hashToken, RESET_TOKEN_TTL_MS } from "@/lib/auth/tokens";
 import { sendMail } from "@/lib/email/mailer";
 import { passwordResetEmailHtml } from "@/emails/templates";
-import { adminPortalBaseUrl, customerPortalBaseUrl } from "@/lib/utils/portalUrls";
 import {
   loginSchema,
   setPasswordSchema,
@@ -82,12 +81,8 @@ export async function loginAction(
     }
   }
 
-  // Generated temporary passwords never contain whitespace, but copying one
-  // out of the invitation email often picks up a trailing space. Trim only
-  // for a temporary password; a user's own password is compared exactly.
-  const submittedPassword = hasTemporaryPassword ? parsed.data.password.trim() : parsed.data.password;
   const validPassword = user.passwordHash
-    ? await verifyPassword(submittedPassword, user.passwordHash)
+    ? await verifyPassword(parsed.data.password, user.passwordHash)
     : false;
 
   if (!validPassword) {
@@ -170,17 +165,15 @@ export async function firstLoginChangePasswordAction(
     redirect(homeForRole(user.role));
   }
 
-  // Same as sign-in: the temporary password may be pasted with stray whitespace.
-  const currentPassword = parsed.data.currentPassword.trim();
   const validPassword = user.passwordHash
-    ? await verifyPassword(currentPassword, user.passwordHash)
+    ? await verifyPassword(parsed.data.currentPassword, user.passwordHash)
     : false;
 
   if (!validPassword) {
     return { error: "The current temporary password you entered is incorrect." };
   }
 
-  if (parsed.data.newPassword === currentPassword) {
+  if (parsed.data.newPassword === parsed.data.currentPassword) {
     return { error: "Your new password must be different from the temporary password." };
   }
 
@@ -284,7 +277,11 @@ export async function forgotPasswordAction(
     user.resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
     await user.save();
 
-    const baseUrl = user.role === "CUSTOMER" ? customerPortalBaseUrl() : adminPortalBaseUrl();
+    const baseUrl = (
+      user.role === "CUSTOMER"
+        ? (process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+        : (process.env.ADMIN_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+    ).replace(/\/+$/, "");
     const actionUrl = `${baseUrl}/reset-password/${rawToken}`;
     await sendMail({
       to: user.email,

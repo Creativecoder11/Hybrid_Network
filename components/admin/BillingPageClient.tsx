@@ -14,7 +14,6 @@ import {
   Eye,
   Pencil,
   Trash2,
-  Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -35,7 +34,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateBillModal } from "@/components/admin/CreateBillModal";
 import { EditBillModal } from "@/components/admin/EditBillModal";
 import { MarkPaidModal } from "@/components/admin/MarkPaidModal";
-import { InvoicePdfButton } from "@/components/admin/InvoicePdfButton";
 import { BillingTrashView } from "@/components/admin/BillingTrashView";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import {
@@ -231,13 +229,6 @@ export function BillingPageClient({
               Trash
             </Button>
           )}
-          <Link
-            href="/admin/billing/recurring"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-4 text-sm font-medium text-text-primary transition-colors hover:bg-surface-raised"
-          >
-            <Repeat className="size-4" />
-            Recurring
-          </Link>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" />
             Add New Bill
@@ -489,7 +480,15 @@ export function BillingPageClient({
                         >
                           <Eye className="size-4" />
                         </Link>
-                        <InvoicePdfButton invoiceId={inv.id} invoiceNumber={inv.invoiceNumber} variant="icon" />
+                        <a
+                          href={`/api/invoices/${inv.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-accent-blue"
+                          aria-label="Download PDF"
+                        >
+                          <Download className="size-4" />
+                        </a>
                         {inv.status !== "PAID" && (
                           <button
                             onClick={() => setEditTarget(inv)}

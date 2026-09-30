@@ -37,7 +37,7 @@ import type { CustomerRow, CustomerStats, PlanOption } from "@/lib/types/admin";
 const STATUS_LABEL: Record<CustomerRow["status"], string> = {
   ACTIVE: "Active",
   SUSPENDED: "Suspended",
-  INVITED: "Invited",
+  INVITED: "Inactive",
 };
 const STATUS_TONE: Record<CustomerRow["status"], "green" | "amber" | "red"> = {
   ACTIVE: "green",
@@ -195,7 +195,7 @@ export function CustomersPageClient({
             <option value="ALL">All statuses</option>
             <option value="ACTIVE">Active</option>
             <option value="SUSPENDED">Suspended</option>
-            <option value="INVITED">Invited</option>
+            <option value="INVITED">Inactive</option>
           </Select>
         </div>
         <div>

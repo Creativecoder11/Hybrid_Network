@@ -22,7 +22,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-line-soft py-2.5 last:border-0">
       <span className="text-xs text-text-muted">{label}</span>
-      <span className="min-w-0 text-right text-sm font-medium text-text-primary wrap-anywhere">{value}</span>
+      <span className="text-right text-sm font-medium text-text-primary">{value}</span>
     </div>
   );
 }
@@ -36,11 +36,11 @@ function ServiceLineCard({ line }: { line: PortalServiceLinePlan }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-accent-green">Starlink service line</p>
-            {/* The service line is the vessel's serviceLineNumber. SLASH's
-                servicePlan.planName is the Starlink product reference (e.g.
-                "nl-enterprise-pool-…-terminal-access-fee-usd"), shown below. */}
-            <p className="mt-1 font-mono text-lg font-bold text-text-primary">{line.serviceLineNumber || "Service line not available"}</p>
-            <p className="text-xs text-text-muted">{line.displayName}</p>
+            <p className="mt-1 text-lg font-bold text-text-primary">{line.planName ?? "Plan not available"}</p>
+            <p className="text-xs text-text-muted">
+              {line.displayName}
+              {line.serviceLineNumber ? ` · ${line.serviceLineNumber}` : ""}
+            </p>
           </div>
           {line.serviceLineActive !== null && (
             <Badge tone={line.serviceLineActive ? "green" : "amber"}>{line.serviceLineActive ? "Active" : "Inactive"}</Badge>
@@ -67,7 +67,6 @@ function ServiceLineCard({ line }: { line: PortalServiceLinePlan }) {
         )}
 
         <div className="mt-4">
-          <InfoRow label="Starlink product" value={line.planName ?? "Not available"} />
           <InfoRow
             label="Billing cycle"
             value={line.billingCycleStart && line.billingCycleEnd ? `${formatDate(line.billingCycleStart)} – ${formatDate(line.billingCycleEnd)}` : "Not available"}

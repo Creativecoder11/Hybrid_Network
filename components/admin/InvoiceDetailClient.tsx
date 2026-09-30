@@ -4,13 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Send, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle2, XCircle, Download } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { MarkPaidModal } from "@/components/admin/MarkPaidModal";
-import { InvoicePdfButton } from "@/components/admin/InvoicePdfButton";
 import { sendInvoiceAction, cancelInvoiceAction, markPaidAction } from "@/lib/actions/invoices";
 import { formatCurrency, formatDate, formatDateTime, formatPeriodMonth } from "@/lib/utils/format";
 import type { InvoiceDetail } from "@/lib/types/billing";
@@ -31,17 +30,12 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
 
   async function handleSend() {
     setPending("send");
-    try {
-      const result = await sendInvoiceAction(invoice.id);
-      if (result?.error) toast.error(result.error);
-      else {
-        toast.success(result?.success ?? "Invoice sent.");
-        router.refresh();
-      }
-    } catch {
-      toast.error("The invoice could not be sent. Please try again.");
-    } finally {
-      setPending(null);
+    const result = await sendInvoiceAction(invoice.id);
+    setPending(null);
+    if (result?.error) toast.error(result.error);
+    else {
+      toast.success(result?.success ?? "Invoice sent.");
+      router.refresh();
     }
   }
 
@@ -82,13 +76,6 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
           <div className="flex items-center gap-3">
             <p className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</p>
             <Badge tone={STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
-            {invoice.recurring && (
-              <Link href="/admin/billing/recurring" title="Generated from a recurring invoice schedule">
-                <Badge tone="blue">
-                  Recurring · month {invoice.recurring.sequence} of {invoice.recurring.of}
-                </Badge>
-              </Link>
-            )}
           </div>
           <p className="mt-1 text-sm text-text-muted">
             <Link href={`/admin/customers/${invoice.customerId}`} className="text-accent-blue hover:underline">
@@ -99,7 +86,12 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <InvoicePdfButton invoiceId={invoice.id} invoiceNumber={invoice.invoiceNumber} />
+          <a href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer">
+            <Button variant="outline">
+              <Download className="size-4" />
+              PDF
+            </Button>
+          </a>
           {invoice.status !== "PAID" && invoice.status !== "CANCELLED" && (
             <>
               <Button onClick={handleSend} loading={pending === "send"}>
