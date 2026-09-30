@@ -35,8 +35,10 @@ test("unavailable telemetry renders as 'Not available', never as 0", () => {
   assert.equal(fmtPct(null), NOT_AVAILABLE);
   assert.equal(fmtPct(0), "0%", "a real 0 reading is still shown");
   assert.equal(fmtMbps(null), NOT_AVAILABLE);
-  assert.equal(fmtMbps(123.4), "123 dB");
-  assert.equal(fmtMbps(4.25), "4.3 dB");
+  assert.equal(fmtMbps(123.4), "123 Mbps");
+  assert.equal(fmtMbps(4.25), "4.3 Mbps");
+  assert.equal(fmtMbps(0.0139), "0.01 Mbps", "idle-dish throughput keeps its unit");
+  assert.equal(fmtMbps(0), "0.0 Mbps", "a real 0 reading is still shown");
   assert.equal(fmtUptime(null), NOT_AVAILABLE);
   assert.equal(fmtUptime(3 * 86400 + 4 * 3600), "3d 4h");
   assert.equal(fmtText(""), NOT_AVAILABLE);

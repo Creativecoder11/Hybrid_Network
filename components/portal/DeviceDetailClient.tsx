@@ -125,7 +125,11 @@ export function DeviceDetailClient({
                       <MetricTile label="Download Throughput" value={live(fmtMbps(terminal.network.downlinkThroughputMbps))} />
                       <MetricTile label="Upload Throughput" value={live(fmtMbps(terminal.network.uplinkThroughputMbps))} />
                       <MetricTile label="Latency (avg ping)" value={live(fmtMs(terminal.network.latencyMs))} />
-                      <MetricTile label="Ping Drop Rate" value={live(fmtPct(terminal.network.packetLossPct, 2))} />
+                      <MetricTile
+                        label="Ping Drop Rate"
+                        value={live(fmtPct(terminal.network.packetLossPct, 2))}
+                        hint="Share of pings dropped in the latest Starlink telemetry sample. 0.00% means none were dropped."
+                      />
                       <MetricTile label="Obstruction" value={live(fmtPct(terminal.network.obstructionPct, 1))} />
                       <MetricTile label="Uptime (since reboot)" value={live(fmtUptime(terminal.network.uptimeSeconds))} />
                     </div>

@@ -166,14 +166,24 @@ export async function getServiceLinePlans(account: PortalAccount): Promise<Porta
   );
 }
 
-/** Daily usage for the last `days` days (max 60), summed across the account's service lines (SLASH). */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Daily usage for the last `days` calendar days (max 60) including today,
+ * summed across the account's service lines (SLASH). Days are UTC, matching
+ * SLASH's day buckets (`date` is midnight UTC).
+ */
 export async function getDailyUsage(
   account: PortalAccount,
   days = 30
 ): Promise<{ rows: PortalDailyUsageRow[]; error: string | null }> {
   if (account.starlinkVesselIds.length === 0) return { rows: [], error: null };
+  const dayCount = Math.min(Math.max(1, days), 60);
   const end = new Date();
-  const start = new Date(end.getTime() - Math.min(days, 60) * 24 * 60 * 60 * 1000);
+  // Start at midnight UTC of the first day, so that day's bucket falls inside
+  // the window instead of being cut off by a mid-day start time.
+  const todayUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const start = new Date(todayUtc - (dayCount - 1) * DAY_MS);
 
   const results = await Promise.allSettled(
     account.starlinkVesselIds.map((id) => getVesselDataUsageHistory(id, { startDate: start, endDate: end }))
@@ -196,6 +206,19 @@ export async function getDailyUsage(
       byDate.set(date, row);
     }
   }
+
+  // SLASH history is sparse: a day with no usage snapshot is simply absent
+  // (its own fillEmptyDays option synthesizes those as zero-usage days), so
+  // fill the gaps to give the chart a continuous axis. Only when real points
+  // came back — a failed request is not "zero usage", and a window with no
+  // points at all keeps the page's empty state.
+  if (byDate.size > 0) {
+    for (let i = 0; i < dayCount; i++) {
+      const date = new Date(start.getTime() + i * DAY_MS).toISOString().slice(0, 10);
+      if (!byDate.has(date)) byDate.set(date, { date, priorityGB: 0, standardGB: 0, nonBillableGB: 0, totalGB: 0 });
+    }
+  }
+
   const rows = Array.from(byDate.values())
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((r) => ({
