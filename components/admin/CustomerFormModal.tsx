@@ -219,8 +219,8 @@ export function CustomerFormModal({
           <Field label="Phone Number" required>
             <Input name="phone" defaultValue={customer?.phone} required />
           </Field>
-          <Field label="Account Type" required>
-            <Select name="accountType" value={accountType} onChange={(e) => setAccountType(e.target.value)} required>
+          <Field label="Account Type" required={mode === "create"}>
+            <Select name="accountType" value={accountType} onChange={(e) => setAccountType(e.target.value)} required={mode === "create"}>
               <option value="">-- Select Account Type --</option>
               <option value="BUSINESS_ENTERPRISE">Business / Enterprise</option>
               <option value="INDIVIDUAL">Individual</option>
@@ -230,8 +230,8 @@ export function CustomerFormModal({
           <Field label="Contact Person">
             <Input name="contactPerson" defaultValue={customer?.contactPerson} />
           </Field>
-          <Field label={identityDocumentLabel(accountType)} required>
-            <Input name="nidTradeLicense" defaultValue={customer?.nidTradeLicense} required />
+          <Field label={identityDocumentLabel(accountType)} required={mode === "create"}>
+            <Input name="nidTradeLicense" defaultValue={customer?.nidTradeLicense} required={mode === "create"} />
             <p className="mt-1 text-[11px] text-text-muted">{IDENTITY_DOCUMENT_HELP}</p>
           </Field>
           <Field label="Card Name">
@@ -289,8 +289,8 @@ export function CustomerFormModal({
               required={mode === "create"}
             />
           </Field>
-          <Field label="Service Plan (first account)" required>
-            <Select name="planId" value={planId} onChange={(e) => setPlanId(e.target.value)} required>
+          <Field label="Service Plan (first account)" required={mode === "create"}>
+            <Select name="planId" value={planId} onChange={(e) => setPlanId(e.target.value)} required={mode === "create"}>
               <option value="">-- Select Plan --</option>
               {plans.map((p) => (
                 <option key={p.id} value={p.id}>

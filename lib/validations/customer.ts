@@ -50,9 +50,12 @@ export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 export const updateCustomerSchema = createCustomerSchema.extend({
   id: z.string().min(1),
   status: z.enum(["ACTIVE", "SUSPENDED", "INVITED"]).optional(),
-  // Required for new customers only: existing customers without a Starlink
-  // vessel (older or non-Starlink services) must still be editable.
+  // Required for new customers only: existing customers created before these
+  // fields were mandatory (or without a Starlink service) must stay editable.
   starlinkVesselId: z.string().trim().optional().default(""),
+  accountType: z.enum(ACCOUNT_TYPES).optional(),
+  nidTradeLicense: z.string().trim().optional().default(""),
+  planId: z.string().trim().optional().default(""),
 });
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
