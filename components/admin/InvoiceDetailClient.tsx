@@ -82,6 +82,13 @@ export function InvoiceDetailClient({ invoice }: { invoice: InvoiceDetail }) {
           <div className="flex items-center gap-3">
             <p className="text-xl font-bold text-text-primary">{invoice.invoiceNumber}</p>
             <Badge tone={STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
+            {invoice.recurring && (
+              <Link href="/admin/billing/recurring" title="Generated from a recurring invoice schedule">
+                <Badge tone="blue">
+                  Recurring · month {invoice.recurring.sequence} of {invoice.recurring.of}
+                </Badge>
+              </Link>
+            )}
           </div>
           <p className="mt-1 text-sm text-text-muted">
             <Link href={`/admin/customers/${invoice.customerId}`} className="text-accent-blue hover:underline">

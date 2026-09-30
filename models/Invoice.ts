@@ -59,6 +59,10 @@ const InvoiceSchema = new Schema(
     sentAt: { type: Date, default: null },
     pdfGeneratedAt: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    // Set on invoices generated from a recurring schedule (models/RecurringInvoice.ts).
+    recurringInvoice: { type: Schema.Types.ObjectId, ref: "RecurringInvoice", default: null },
+    /** 1-based position in the schedule (1 = first month). */
+    recurringSequence: { type: Number, default: null },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
@@ -68,6 +72,13 @@ InvoiceSchema.index({ customer: 1, status: 1 });
 InvoiceSchema.index({ customerAccount: 1, status: 1 });
 InvoiceSchema.index({ dueDate: 1 });
 InvoiceSchema.index({ deletedAt: 1 });
+// One invoice per schedule month, even if two generation runs overlap. Only
+// applies to generated invoices; trashed ones still count, so a deleted month
+// is never silently re-created.
+InvoiceSchema.index(
+  { recurringInvoice: 1, recurringSequence: 1 },
+  { unique: true, partialFilterExpression: { recurringInvoice: { $type: "objectId" } } }
+);
 
 // Soft-delete safety net: every find/count/aggregate query on Invoice
 // transparently excludes trashed invoices unless it explicitly filters on
