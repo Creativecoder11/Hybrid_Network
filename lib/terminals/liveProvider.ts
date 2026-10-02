@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db/connect";
 import { CustomerAccount } from "@/models/CustomerAccount";
 import { User } from "@/models/User";
 import { getVessel, listVessels } from "@/lib/starlink/vessels";
+import { listTenantUserTerminals } from "@/lib/starlink/inventory";
 import { getVesselDataUsage, listCurrentDataUsage } from "@/lib/starlink/usage";
 import { getVesselServicePlan } from "@/lib/starlink/service-plans";
 import { getVesselLocation, getVesselLocationHistory, listCurrentLocations } from "@/lib/starlink/locations";
@@ -11,6 +12,7 @@ import { describeStarlinkError } from "@/lib/starlink/client";
 import { deriveConnectivity } from "./status";
 import type {
   SlashVessel,
+  SlashUserTerminal,
   SlashDataUsage,
   SlashServicePlan,
   SlashLocation,
@@ -101,6 +103,90 @@ async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
   return links;
 }
 
+async function getEnrichedVessels(): Promise<SlashVessel[]> {
+  const [vessels, tenantTerminals] = await Promise.all([
+    safe("GET /vessels", listVessels),
+    safe("GET /user-terminals", listTenantUserTerminals),
+  ]);
+
+  const vesselList = vessels ?? [];
+  const terminalList = tenantTerminals ?? [];
+
+  const byVesselId = new Map<string, SlashUserTerminal[]>();
+  const byServiceLine = new Map<string, SlashUserTerminal[]>();
+  const allTerms: SlashUserTerminal[] = [];
+
+  for (const t of terminalList) {
+    const term: SlashUserTerminal = {
+      userTerminalId: t.userTerminalId,
+      kitSerialNumber: t.kitSerialNumber,
+      dishSerialNumber: t.dishSerialNumber,
+      status: t.active ? "ACTIVE" : "INACTIVE",
+      active: t.active,
+      createdAt: "",
+    };
+    allTerms.push(term);
+
+    if (t.vesselId) {
+      const list = byVesselId.get(t.vesselId) ?? [];
+      list.push(term);
+      byVesselId.set(t.vesselId, list);
+    }
+    if (t.serviceLineNumber) {
+      const list = byServiceLine.get(t.serviceLineNumber) ?? [];
+      list.push(term);
+      byServiceLine.set(t.serviceLineNumber, list);
+    }
+  }
+
+  const assignedTerminalIds = new Set<string>();
+
+  const enriched = vesselList.map((v) => {
+    let terms: SlashUserTerminal[] = [];
+    if (v.userTerminals && v.userTerminals.length > 0) {
+      terms = [...v.userTerminals];
+    } else if (byVesselId.has(v.vesselId)) {
+      terms = byVesselId.get(v.vesselId)!;
+    } else if (v.serviceLineNumber && byServiceLine.has(v.serviceLineNumber)) {
+      terms = byServiceLine.get(v.serviceLineNumber)!;
+    }
+    for (const t of terms) {
+      assignedTerminalIds.add(t.userTerminalId);
+    }
+    return {
+      ...v,
+      userTerminals: terms,
+    };
+  });
+
+  const unassigned = allTerms.filter((t) => !assignedTerminalIds.has(t.userTerminalId));
+  if (unassigned.length > 0) {
+    const emptyVessel = enriched.find((v) => v.userTerminals.length === 0);
+    if (emptyVessel) {
+      emptyVessel.userTerminals = unassigned;
+    } else {
+      enriched.push({
+        vesselId: "unassigned-inventory",
+        vesselName: "Starlink Inventory",
+        vesselSerialNumber: "",
+        tenantName: "Hybrid Network Pty Ltd",
+        status: "active",
+        serviceLineNumber: "",
+        serviceLineNickname: "Unassigned Inventory",
+        serviceLineActive: false,
+        serviceLineAddressReferenceId: "",
+        serviceLineProductReferenceId: "",
+        dataOptInEnabled: false,
+        publicIpEnabled: false,
+        userTerminals: unassigned,
+        insertedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  return enriched;
+}
+
 function toMap<T>(entries: (readonly [string, T] | null)[]): Map<string, T> {
   return new Map(entries.filter((e): e is readonly [string, T] => e !== null));
 }
@@ -110,9 +196,7 @@ async function loadSources(vesselIds: string[], opts: { detail: boolean; allVess
 
   const vesselsPromise = opts.allVessels
     ? Promise.resolve(new Map(opts.allVessels.map((v) => [v.vesselId, v])))
-    : bulk
-      ? safe("GET /vessels", listVessels).then((all) => new Map((all ?? []).map((v) => [v.vesselId, v])))
-      : Promise.all(vesselIds.map((id) => safe(`GET /vessels/${id}`, () => getVessel(id)).then((v) => (v ? ([id, v] as const) : null)))).then(toMap);
+    : getEnrichedVessels().then((all) => new Map((all ?? []).map((v) => [v.vesselId, v])));
 
   const telemetryPromise: Promise<{ rows: SlashVesselLatestTelemetry[]; failed: Set<string> }> = bulk
     ? safe("GET /telemetry/vessels/latest", () => listLatestTelemetry()).then((rows) => ({
@@ -419,11 +503,12 @@ export async function liveListTerminalsDetailed(filters?: TerminalListFilters): 
   if (links === null) return { records: [], failedVesselIds: [] };
 
   const scoped = Boolean(filters?.accountIds || filters?.customerId);
+  const allVessels = await getEnrichedVessels();
   if (scoped) {
     if (links.length === 0) return { records: [], failedVesselIds: [] };
     const sources = await loadSources(
       links.map((l) => l.vesselId),
-      { detail: false }
+      { detail: false, allVessels }
     );
     return {
       records: applyFilters(buildAll(links, sources), filters),
@@ -432,8 +517,7 @@ export async function liveListTerminalsDetailed(filters?: TerminalListFilters): 
   }
 
   // Admin fleet view: every vessel in the SLASH tenant, linked or not.
-  const allVessels = await safe("GET /vessels", listVessels);
-  if (!allVessels) return { records: [], failedVesselIds: links.map((l) => l.vesselId) };
+  if (!allVessels || allVessels.length === 0) return { records: [], failedVesselIds: links.map((l) => l.vesselId) };
   const linked = new Map(links.map((l) => [l.vesselId, l]));
   const fleetLinks: LiveLink[] = allVessels.map(
     (v) =>
@@ -458,8 +542,8 @@ export async function liveListTerminals(filters?: TerminalListFilters): Promise<
 
 /** Full detail (service plan + location history) for one user terminal. */
 export async function liveGetTerminal(id: string): Promise<TerminalRecord | null> {
-  const allVessels = await safe("GET /vessels", listVessels);
-  const vessel = allVessels?.find((v) => (v.userTerminals ?? []).some((t) => t.userTerminalId === id));
+  const allVessels = await getEnrichedVessels();
+  const vessel = allVessels?.find((v) => (v.userTerminals ?? []).some((t) => t.userTerminalId === id || t.kitSerialNumber === id));
   if (!vessel) return null;
 
   const account = await safe("load vessel owner", async () => {
@@ -479,6 +563,6 @@ export async function liveGetTerminal(id: string): Promise<TerminalRecord | null
   }
 
   const sources = await loadSources([vessel.vesselId], { detail: true, allVessels: [vessel] });
-  const terminal = vessel.userTerminals.find((t) => t.userTerminalId === id);
+  const terminal = vessel.userTerminals.find((t) => t.userTerminalId === id || t.kitSerialNumber === id);
   return terminal ? buildRecord(link, vessel, terminal, sources) : null;
 }

@@ -4,37 +4,37 @@ import { z } from "zod";
 // Mirrors lib/starlink/types.ts (official spec). looseObject where the spec
 // allows extra/omitted fields so a new upstream field never breaks a page.
 
-export const slashUserTerminalSchema = z.object({
+export const slashUserTerminalSchema = z.looseObject({
   userTerminalId: z.string(),
-  kitSerialNumber: z.string(),
-  dishSerialNumber: z.string(),
-  status: z.string(),
-  active: z.boolean(),
-  createdAt: z.string(),
+  kitSerialNumber: z.string().optional().default(""),
+  dishSerialNumber: z.string().optional().default(""),
+  status: z.string().optional().default("UNKNOWN"),
+  active: z.boolean().optional().default(false),
+  createdAt: z.string().optional().default(""),
 });
 
-export const slashVesselSchema = z.object({
+export const slashVesselSchema = z.looseObject({
   vesselId: z.string(),
-  vesselName: z.string(),
-  vesselSerialNumber: z.string(),
-  tenantName: z.string(),
-  status: z.string(),
-  serviceLineNumber: z.string(),
-  serviceLineNickname: z.string(),
-  serviceLineActive: z.boolean(),
-  serviceLineAddressReferenceId: z.string(),
-  serviceLineProductReferenceId: z.string(),
-  dataOptInEnabled: z.boolean(),
-  publicIpEnabled: z.boolean(),
-  userTerminals: z.array(slashUserTerminalSchema),
-  insertedAt: z.string(),
+  vesselName: z.string().optional().default(""),
+  vesselSerialNumber: z.string().optional().default(""),
+  tenantName: z.string().optional().default(""),
+  status: z.string().optional().default(""),
+  serviceLineNumber: z.string().optional().default(""),
+  serviceLineNickname: z.string().optional().default(""),
+  serviceLineActive: z.boolean().optional().default(false),
+  serviceLineAddressReferenceId: z.string().optional().default(""),
+  serviceLineProductReferenceId: z.string().optional().default(""),
+  dataOptInEnabled: z.boolean().optional().default(false),
+  publicIpEnabled: z.boolean().optional().default(false),
+  userTerminals: z.array(slashUserTerminalSchema).optional().default([]),
+  insertedAt: z.string().optional().default(""),
 });
 
-export const slashVesselListResponseSchema = z.object({
-  vessels: z.array(slashVesselSchema),
-  totalCount: z.number(),
-  page: z.number(),
-  limit: z.number(),
+export const slashVesselListResponseSchema = z.looseObject({
+  vessels: z.array(slashVesselSchema).optional().default([]),
+  totalCount: z.number().optional().default(0),
+  page: z.number().optional().default(0),
+  limit: z.number().optional().default(0),
 });
 
 export const slashDataUsageSchema = z.object({
