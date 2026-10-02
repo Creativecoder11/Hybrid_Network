@@ -54,6 +54,7 @@ export function CustomerFormModal({
   const [status, setStatus] = useState<"ACTIVE" | "SUSPENDED" | "INVITED">(customer?.status ?? "ACTIVE");
   const [planId, setPlanId] = useState(customer?.planId ?? "");
   const [trackingEnabled, setTrackingEnabled] = useState(customer?.trackingEnabled !== false);
+  const [starlinkVesselId, setStarlinkVesselId] = useState(customer?.starlinkVesselId ?? "");
 
   useEffect(() => {
     if (state?.success && mode === "edit") {
@@ -280,10 +281,23 @@ export function CustomerFormModal({
           <Field label="Starlink Vessel ID (first account)" required>
             <Input
               name="starlinkVesselId"
-              defaultValue={customer?.starlinkVesselId ?? ""}
+              value={starlinkVesselId}
+              onChange={(e) => setStarlinkVesselId(e.target.value)}
               placeholder="e.g. 019ff593-6557-785c-ac33-36d11b7f301c"
+              className="font-mono text-xs"
               required
             />
+            <p className="mt-1 text-[11px] text-text-muted">
+              Live vessel UUID from Starlink (e.g.{" "}
+              <button
+                type="button"
+                className="font-mono text-accent-green underline hover:text-accent-green/80 cursor-pointer"
+                onClick={() => setStarlinkVesselId("019ff593-6557-785c-ac33-36d11b7f301c")}
+              >
+                019ff593-6557-785c-ac33-36d11b7f301c
+              </button>{" "}
+              for TEST UNIT)
+            </p>
           </Field>
           <Field label="Service Plan (first account)" required>
             <Select name="planId" value={planId} onChange={(e) => setPlanId(e.target.value)} required>

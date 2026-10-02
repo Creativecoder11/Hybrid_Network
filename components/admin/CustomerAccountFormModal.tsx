@@ -96,7 +96,7 @@ export function CustomerAccountFormModal({
             <div className="sm:col-span-2">
               <Field
                 label="Starlink Vessel ID(s)"
-                hint="From the SLASH dashboard. Devices, live status, usage and location for this account come from these vessels. One per line or comma separated."
+                hint="From Starlink/SLASH (e.g. 019ff593-6557-785c-ac33-36d11b7f301c for TEST UNIT). Devices, live status, usage and location for this account come from these vessels. One per line or comma separated."
               >
                 <Textarea name="starlinkVesselIds" rows={2} defaultValue={account?.starlinkVesselIds.join("\n")} className="font-mono text-xs" />
               </Field>

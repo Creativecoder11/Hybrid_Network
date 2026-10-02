@@ -62,8 +62,25 @@ export async function listAuthorizedAccounts(user: CurrentUser): Promise<PortalA
   if (!user.accountAccessAll) {
     filter._id = { $in: user.accountAccess.filter((id) => isValidObjectId(id)) };
   }
-  const accounts = await CustomerAccount.find(filter).sort({ accountNumber: 1 }).lean();
-  return accounts.map(toPortalAccount);
+  const [accounts, profileDoc] = await Promise.all([
+    CustomerAccount.find(filter).sort({ accountNumber: 1 }).lean(),
+    User.findById(user.customerProfileId).select("starlinkVesselId").lean(),
+  ]);
+  const fallbackVessel = profileDoc?.starlinkVesselId?.trim() || null;
+
+  return accounts.map((a, i) => {
+    const vessels = [...(a.starlinkVesselIds ?? []).filter(Boolean)];
+    if (vessels.length === 0 && fallbackVessel && i === 0) {
+      vessels.push(fallbackVessel);
+    }
+    return {
+      id: a._id.toString(),
+      accountNumber: a.accountNumber,
+      name: a.name ?? "",
+      status: a.status ?? "ACTIVE",
+      starlinkVesselIds: vessels,
+    };
+  });
 }
 
 async function buildContext(user: CurrentUser, requestedAccountId?: string | null): Promise<PortalContext> {

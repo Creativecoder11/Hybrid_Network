@@ -78,26 +78,31 @@ async function safe<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
 
 async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
   await connectDB();
-  const query: Record<string, unknown> = { "starlinkVesselIds.0": { $exists: true } };
+  const query: Record<string, unknown> = {};
   if (filters?.accountIds) query._id = { $in: filters.accountIds };
   if (filters?.customerId) query.customer = filters.customerId;
   const accounts = await CustomerAccount.find(query).select("accountNumber customer starlinkVesselIds").lean();
 
   const customerIds = Array.from(new Set(accounts.map((a) => a.customer.toString())));
-  const customers = await User.find({ _id: { $in: customerIds } }).select("name company").lean();
-  const nameById = new Map(customers.map((c) => [c._id.toString(), c.company || c.name]));
+  const customers = await User.find({ _id: { $in: customerIds } }).select("name company starlinkVesselId").lean();
+  const customerMap = new Map(customers.map((c) => [c._id.toString(), c]));
 
   const links: LiveLink[] = [];
   const seen = new Set<string>();
   for (const a of accounts) {
-    for (const vesselId of a.starlinkVesselIds ?? []) {
+    const cust = customerMap.get(a.customer.toString());
+    const vessels = [...(a.starlinkVesselIds ?? []).filter(Boolean)];
+    if (vessels.length === 0 && cust?.starlinkVesselId) {
+      vessels.push(cust.starlinkVesselId.trim());
+    }
+    for (const vesselId of vessels) {
       if (!vesselId || seen.has(vesselId)) continue; // one owner per vessel
       seen.add(vesselId);
       links.push({
         accountId: a._id.toString(),
         accountNumber: a.accountNumber,
         customerId: a.customer.toString(),
-        customerName: nameById.get(a.customer.toString()) ?? null,
+        customerName: cust ? cust.company || cust.name : null,
         vesselId,
       });
     }
