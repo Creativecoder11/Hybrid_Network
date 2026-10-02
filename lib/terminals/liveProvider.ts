@@ -129,13 +129,22 @@ async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
   return links;
 }
 
+let lastKnownEnrichedVessels: SlashVessel[] = [];
+const lastKnownTerminalRecords = new Map<string, TerminalRecord>();
+
 async function getEnrichedVessels(): Promise<SlashVessel[]> {
   const [vessels, tenantTerminals] = await Promise.all([
     safe("GET /vessels", listVessels),
     safe("GET /user-terminals", listTenantUserTerminals),
   ]);
 
-  const vesselList = vessels ?? [];
+  if ((!vessels || vessels.length === 0) && (!tenantTerminals || tenantTerminals.length === 0)) {
+    if (lastKnownEnrichedVessels.length > 0) {
+      return lastKnownEnrichedVessels;
+    }
+  }
+
+  const vesselList = vessels ?? (lastKnownEnrichedVessels.length > 0 ? lastKnownEnrichedVessels : []);
   const terminalList = tenantTerminals ?? [];
 
   const byVesselId = new Map<string, SlashUserTerminal[]>();
@@ -210,7 +219,10 @@ async function getEnrichedVessels(): Promise<SlashVessel[]> {
     }
   }
 
-  return enriched;
+  if (enriched.length > 0 && enriched.some((v) => (v.userTerminals ?? []).length > 0)) {
+    lastKnownEnrichedVessels = enriched;
+  }
+  return enriched.length > 0 ? enriched : lastKnownEnrichedVessels;
 }
 
 function toMap<T>(entries: (readonly [string, T] | null)[]): Map<string, T> {
@@ -624,8 +636,13 @@ export async function liveListTerminals(filters?: TerminalListFilters): Promise<
 /** Full detail (service plan + location history) for one user terminal. */
 export async function liveGetTerminal(id: string, preferredAccountId?: string | null): Promise<TerminalRecord | null> {
   const allVessels = await getEnrichedVessels();
-  const vessel = allVessels?.find((v) => (v.userTerminals ?? []).some((t) => t.userTerminalId === id || t.kitSerialNumber === id));
-  if (!vessel) return null;
+  let vessel = allVessels?.find((v) => (v.userTerminals ?? []).some((t) => t.userTerminalId === id || t.kitSerialNumber === id || t.dishSerialNumber === id));
+  if (!vessel && lastKnownEnrichedVessels.length > 0) {
+    vessel = lastKnownEnrichedVessels.find((v) => (v.userTerminals ?? []).some((t) => t.userTerminalId === id || t.kitSerialNumber === id || t.dishSerialNumber === id));
+  }
+  if (!vessel) {
+    return lastKnownTerminalRecords.get(id) ?? null;
+  }
 
   const account = await safe("load vessel owner", async () => {
     await connectDB();
@@ -663,6 +680,15 @@ export async function liveGetTerminal(id: string, preferredAccountId?: string | 
   }
 
   const sources = await loadSources([vessel.vesselId], { detail: true, allVessels: [vessel] });
-  const terminal = vessel.userTerminals.find((t) => t.userTerminalId === id || t.kitSerialNumber === id);
-  return terminal ? buildRecord(link, vessel, terminal, sources) : null;
+  const terminal = vessel.userTerminals.find((t) => t.userTerminalId === id || t.kitSerialNumber === id || t.dishSerialNumber === id);
+  if (!terminal) {
+    return lastKnownTerminalRecords.get(id) ?? null;
+  }
+  const record = buildRecord(link, vessel, terminal, sources);
+  if (record) {
+    lastKnownTerminalRecords.set(record.id, record);
+    if (record.identification.serialNumber) lastKnownTerminalRecords.set(record.identification.serialNumber, record);
+    if (record.identification.hardwareId) lastKnownTerminalRecords.set(record.identification.hardwareId, record);
+  }
+  return record;
 }
