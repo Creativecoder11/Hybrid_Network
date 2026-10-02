@@ -130,6 +130,29 @@ export async function getServiceLinePlans(account: PortalAccount): Promise<Porta
       const firstError = [vessel, plan, usage].find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
       if (firstError) console.error(`[portal] SLASH plan/usage for ${vesselId}: ${describeStarlinkError(firstError.reason)}`);
 
+      let usageInfo = u;
+      if (usageInfo && usageInfo.totalGB === 0) {
+        try {
+          const hist = await getVesselDataUsageHistory(vesselId);
+          if (hist.length > 0) {
+            const histPriority = hist.reduce((s, p) => s + (p.priorityGB || 0), 0);
+            const histStandard = hist.reduce((s, p) => s + (p.standardGB || 0), 0);
+            const histTotal = hist.reduce((s, p) => s + (p.totalGB || 0), 0);
+            usageInfo = {
+              ...usageInfo,
+              priorityGB: Math.round(histPriority * 100) / 100,
+              standardGB: Math.round(histStandard * 100) / 100,
+              totalGB: Math.round(histTotal * 100) / 100,
+              billingCycleStart: hist[0].date,
+              billingCycleEnd: hist[hist.length - 1].date,
+              lastUpdatedAt: hist[hist.length - 1].lastUpdatedAt ?? null,
+            };
+          }
+        } catch {
+          // keep original
+        }
+      }
+
       return {
         vesselId,
         serviceLineNumber: v?.serviceLineNumber ?? "",
@@ -144,20 +167,20 @@ export async function getServiceLinePlans(account: PortalAccount): Promise<Porta
         isOptedIntoOverage: p ? p.isOptedIntoOverage : null,
         overageName: p?.overageName ?? null,
         autoRenew: p?.autoRenew ?? null,
-        billingCycleStart: p?.billingCycleStart ?? u?.billingCycleStart ?? null,
-        billingCycleEnd: p?.billingCycleEnd ?? u?.billingCycleEnd ?? null,
+        billingCycleStart: p?.billingCycleStart ?? usageInfo?.billingCycleStart ?? null,
+        billingCycleEnd: p?.billingCycleEnd ?? usageInfo?.billingCycleEnd ?? null,
         currentActivationDate: p?.currentActivationDate ?? null,
         subscriptionEndDate: p?.subscriptionEndDate ?? null,
-        usage: u
+        usage: usageInfo
           ? {
-              priorityGB: u.priorityGB,
-              standardGB: u.standardGB,
-              optInPriorityGB: u.optInPriorityGB,
-              nonBillableGB: u.nonBillableGB,
-              totalGB: u.totalGB,
-              billingCycleStart: u.billingCycleStart,
-              billingCycleEnd: u.billingCycleEnd,
-              lastUpdatedAt: u.lastUpdatedAt ?? null,
+              priorityGB: usageInfo.priorityGB,
+              standardGB: usageInfo.standardGB,
+              optInPriorityGB: usageInfo.optInPriorityGB,
+              nonBillableGB: usageInfo.nonBillableGB,
+              totalGB: usageInfo.totalGB,
+              billingCycleStart: usageInfo.billingCycleStart,
+              billingCycleEnd: usageInfo.billingCycleEnd,
+              lastUpdatedAt: usageInfo.lastUpdatedAt ?? null,
             }
           : null,
         error: firstError ? friendlyStarlinkErrorMessage(firstError.reason) : null,

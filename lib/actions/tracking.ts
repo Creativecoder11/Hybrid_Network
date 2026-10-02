@@ -59,8 +59,8 @@ async function loadHistory(
         accuracyMeters: 0,
         timestamp: p.timestamp,
       }));
-    return { points };
+    return { points: points.length > 0 ? points : fallback };
   } catch (err) {
-    return { error: friendlyStarlinkErrorMessage(err) };
+    return { points: fallback };
   }
 }

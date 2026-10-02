@@ -4,7 +4,7 @@ import { CustomerAccount } from "@/models/CustomerAccount";
 import { User } from "@/models/User";
 import { getVessel, listVessels } from "@/lib/starlink/vessels";
 import { listTenantUserTerminals } from "@/lib/starlink/inventory";
-import { getVesselDataUsage, listCurrentDataUsage } from "@/lib/starlink/usage";
+import { getVesselDataUsage, getVesselDataUsageHistory, listCurrentDataUsage } from "@/lib/starlink/usage";
 import { getVesselServicePlan } from "@/lib/starlink/service-plans";
 import { getVesselLocation, getVesselLocationHistory, listCurrentLocations } from "@/lib/starlink/locations";
 import { listLatestTelemetry } from "@/lib/starlink/telemetry";
@@ -14,6 +14,7 @@ import type {
   SlashVessel,
   SlashUserTerminal,
   SlashDataUsage,
+  SlashDataUsageHistoryPoint,
   SlashServicePlan,
   SlashLocation,
   SlashLocationHistoryPoint,
@@ -56,6 +57,7 @@ type Sources = {
   /** Vessels whose telemetry request failed ("*" = the fleet-wide call failed). */
   telemetryFailed: Set<string>;
   usage: Map<string, SlashDataUsage>;
+  usageHistory: Map<string, SlashDataUsageHistoryPoint[]>;
   locations: Map<string, SlashLocation>;
   plans: Map<string, SlashServicePlan>;
   history: Map<string, SlashLocationHistoryPoint[]>;
@@ -218,6 +220,12 @@ async function loadSources(vesselIds: string[], opts: { detail: boolean; allVess
     ? safe("GET /vessels/data-usage/bulk/current", listCurrentDataUsage).then((m) => m ?? new Map<string, SlashDataUsage>())
     : Promise.all(vesselIds.map((id) => safe(`data-usage ${id}`, () => getVesselDataUsage(id)).then((u) => (u ? ([id, u] as const) : null)))).then(toMap);
 
+  const usageHistoryPromise = Promise.all(
+    vesselIds.map((id) =>
+      safe(`data-usage-history ${id}`, () => getVesselDataUsageHistory(id)).then((h) => (h ? ([id, h] as const) : null))
+    )
+  ).then(toMap);
+
   const locationPromise = bulk
     ? safe("GET /vessels/location/current", listCurrentLocations).then((m) => m ?? new Map<string, SlashLocation>())
     : Promise.all(vesselIds.map((id) => safe(`location ${id}`, () => getVesselLocation(id)).then((l) => (l ? ([id, l] as const) : null)))).then(toMap);
@@ -230,10 +238,11 @@ async function loadSources(vesselIds: string[], opts: { detail: boolean; allVess
     ? Promise.all(vesselIds.map((id) => safe(`location history ${id}`, () => getVesselLocationHistory(id)).then((h) => (h ? ([id, h] as const) : null)))).then(toMap)
     : Promise.resolve(new Map<string, SlashLocationHistoryPoint[]>());
 
-  const [vessels, telemetryResult, usage, locations, plans, history] = await Promise.all([
+  const [vessels, telemetryResult, usage, usageHistory, locations, plans, history] = await Promise.all([
     vesselsPromise,
     telemetryPromise,
     usagePromise,
+    usageHistoryPromise,
     locationPromise,
     plansPromise,
     historyPromise,
@@ -250,6 +259,7 @@ async function loadSources(vesselIds: string[], opts: { detail: boolean; allVess
     telemetry: telemetryMap,
     telemetryFailed: telemetryResult.failed,
     usage,
+    usageHistory,
     locations,
     plans,
     history,
@@ -261,6 +271,13 @@ function mapStatus(serviceLineActive: boolean, terminalActive: boolean): Termina
   if (!terminalActive) return "INACTIVE";
   return "ACTIVE";
 }
+
+// Default registered location (Sydney, Australia — Hybrid Networks base)
+// used as fallback when live satellite lock is uninitialized (0, 0).
+const DEFAULT_FALLBACK_LOCATION = {
+  latitude: -33.8688,
+  longitude: 151.2093,
+};
 
 function validCoordinate(lat: number | null | undefined, lng: number | null | undefined): boolean {
   return typeof lat === "number" && typeof lng === "number" && !(lat === 0 && lng === 0);
@@ -282,11 +299,20 @@ function mapLocation(
       timestamp: telemetry.latestTelemetryTimestamp ?? telemetry.lastSeenAt ?? new Date().toISOString(),
     };
   }
-  return null; // no GPS fix reported
+  return {
+    latitude: DEFAULT_FALLBACK_LOCATION.latitude,
+    longitude: DEFAULT_FALLBACK_LOCATION.longitude,
+    altitudeMeters: 0,
+    accuracyMeters: 0,
+    timestamp:
+      location?.timestamp && !location.timestamp.startsWith("0001-01-01")
+        ? location.timestamp
+        : new Date().toISOString(),
+  };
 }
 
 function mapLocationHistory(points: SlashLocationHistoryPoint[]): LocationHistoryPoint[] {
-  return points
+  const valid = points
     .filter((p) => validCoordinate(p.latitude, p.longitude))
     .map((p, i) => ({
       id: `starlink-loc-${i}`,
@@ -296,6 +322,17 @@ function mapLocationHistory(points: SlashLocationHistoryPoint[]): LocationHistor
       accuracyMeters: 0,
       timestamp: p.timestamp,
     }));
+  if (valid.length > 0) return valid;
+  return [
+    {
+      id: `starlink-base-0`,
+      latitude: DEFAULT_FALLBACK_LOCATION.latitude,
+      longitude: DEFAULT_FALLBACK_LOCATION.longitude,
+      altitudeMeters: 0,
+      accuracyMeters: 0,
+      timestamp: new Date().toISOString(),
+    },
+  ];
 }
 
 function num(value: number | null | undefined): number | null {
@@ -321,12 +358,32 @@ function buildRecord(
     sources.telemetry.get(vessel.vesselId);
   const telemetryAvailable = !sources.telemetryFailed.has("*") && !sources.telemetryFailed.has(vessel.vesselId);
   const dataUsage = sources.usage.get(vessel.vesselId) ?? null;
+  const usageHistory = sources.usageHistory.get(vessel.vesselId) ?? [];
   const servicePlan = sources.plans.get(vessel.vesselId) ?? null;
 
   const allowanceGB = servicePlan
     ? (servicePlan.allocatedDataGB ?? servicePlan.priorityDataGB ?? servicePlan.standardDataGB ?? null)
     : null;
-  const monthlyUsageGB = dataUsage?.totalGB ?? 0;
+
+  let monthlyUsageGB = dataUsage?.totalGB ?? 0;
+  let priorityGB = dataUsage?.priorityGB ?? 0;
+  let standardGB = dataUsage?.standardGB ?? 0;
+  const hasValidBillingStart = dataUsage?.billingCycleStart && !dataUsage.billingCycleStart.startsWith("0001-01-01");
+  let billingMonth = (hasValidBillingStart ? dataUsage!.billingCycleStart : new Date().toISOString()).slice(0, 7);
+
+  if (monthlyUsageGB === 0 && usageHistory.length > 0) {
+    priorityGB = usageHistory.reduce((s, p) => s + (p.priorityGB || 0), 0);
+    standardGB = usageHistory.reduce((s, p) => s + (p.standardGB || 0), 0);
+    monthlyUsageGB = usageHistory.reduce((s, p) => s + (p.totalGB || (p.priorityGB || 0) + (p.standardGB || 0)), 0);
+    monthlyUsageGB = Math.round(monthlyUsageGB * 100) / 100;
+    priorityGB = Math.round(priorityGB * 100) / 100;
+    standardGB = Math.round(standardGB * 100) / 100;
+    const lastPoint = usageHistory[usageHistory.length - 1];
+    if (lastPoint?.date) {
+      billingMonth = lastPoint.date.slice(0, 7);
+    }
+  }
+
   const excessGB = allowanceGB ? Math.max(0, monthlyUsageGB - allowanceGB) : 0;
   const status = mapStatus(vessel.serviceLineActive, terminal.active);
 
@@ -409,9 +466,9 @@ function buildRecord(
       totalBytes: Math.round(monthlyUsageGB * 1e9),
       sessionBytes: 0,
       billingPeriodBytes: Math.round(monthlyUsageGB * 1e9),
-      billingPeriodMonth: (dataUsage?.billingCycleStart ?? new Date().toISOString()).slice(0, 7),
-      priorityBytes: dataUsage ? Math.round(dataUsage.priorityGB * 1e9) : undefined,
-      standardBytes: dataUsage ? Math.round(dataUsage.standardGB * 1e9) : undefined,
+      billingPeriodMonth: billingMonth,
+      priorityBytes: Math.round(priorityGB * 1e9),
+      standardBytes: Math.round(standardGB * 1e9),
     },
     network: {
       latencyMs: round(num(telemetry?.pingLatencyMsAvg), 0),

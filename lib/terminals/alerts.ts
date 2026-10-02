@@ -46,24 +46,45 @@ export async function listTerminalAlerts(filters?: Pick<TerminalListFilters, "cu
 
   const visible = scoped ? episodes.filter((e) => e.deviceId && byId.has(e.deviceId)) : episodes;
 
-  return visible
-    .map((e, i) => {
-      const terminal = e.deviceId ? byId.get(e.deviceId) : undefined;
-      return {
-        id: `${e.deviceId ?? "unknown"}-${e.alertId ?? i}-${e.firstSeen ?? i}`,
-        deviceId: e.deviceId ?? null,
-        alertName: humanize(e.alertName),
-        description: e.alertDescription ?? "",
-        active: Boolean(e.active),
-        firstSeen: e.firstSeen ?? null,
-        lastSeen: e.lastSeen ?? e.timestamp ?? null,
-        sampleCount: typeof e.sampleCount === "number" ? e.sampleCount : null,
-        terminalLabel: terminal?.activation.displayName ?? terminal?.identification.serialNumber ?? e.deviceId ?? null,
-        customerName: terminal?.activation.assignedCustomerName ?? null,
-        customerId: terminal?.activation.assignedCustomerId ?? null,
-        accountId: terminal?.activation.assignedAccountId ?? null,
-        accountNumber: terminal?.activation.assignedAccountNumber ?? null,
-      };
-    })
-    .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
+  const mapped = visible.map((e, i) => {
+    const terminal = e.deviceId ? byId.get(e.deviceId) : undefined;
+    return {
+      id: `${e.deviceId ?? "unknown"}-${e.alertId ?? i}-${e.firstSeen ?? i}`,
+      deviceId: e.deviceId ?? null,
+      alertName: humanize(e.alertName),
+      description: e.alertDescription ?? "",
+      active: Boolean(e.active),
+      firstSeen: e.firstSeen ?? null,
+      lastSeen: e.lastSeen ?? e.timestamp ?? null,
+      sampleCount: typeof e.sampleCount === "number" ? e.sampleCount : null,
+      terminalLabel: terminal?.activation.displayName ?? terminal?.identification.serialNumber ?? e.deviceId ?? null,
+      customerName: terminal?.activation.assignedCustomerName ?? null,
+      customerId: terminal?.activation.assignedCustomerId ?? null,
+      accountId: terminal?.activation.assignedAccountId ?? null,
+      accountNumber: terminal?.activation.assignedAccountNumber ?? null,
+    };
+  });
+
+  const operationalAlerts: EnrichedAlert[] = [];
+  for (const t of terminals) {
+    if (t.status === "SUSPENDED") {
+      operationalAlerts.push({
+        id: `sys-${t.id}-suspended`,
+        deviceId: t.id,
+        alertName: "Service Line Suspended",
+        description: "Starlink service line is currently inactive / suspended upstream.",
+        active: true,
+        firstSeen: t.activation.activationDate || null,
+        lastSeen: new Date().toISOString(),
+        sampleCount: 1,
+        terminalLabel: t.activation.displayName ?? t.identification.serialNumber,
+        customerName: t.activation.assignedCustomerName ?? null,
+        customerId: t.activation.assignedCustomerId ?? null,
+        accountId: t.activation.assignedAccountId ?? null,
+        accountNumber: t.activation.assignedAccountNumber ?? null,
+      });
+    }
+  }
+
+  return [...operationalAlerts, ...mapped].sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
 }
