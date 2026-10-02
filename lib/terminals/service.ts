@@ -55,8 +55,8 @@ export async function listAccountTerminals(accountIds: string[]): Promise<{ term
   return { terminals: records, unavailable: failedVesselIds.length > 0 };
 }
 
-export async function getTerminal(id: string): Promise<TerminalRecord | null> {
-  const record = (await liveGetTerminal(id)) ?? (await mockGetTerminal(id));
+export async function getTerminal(id: string, preferredAccountId?: string | null): Promise<TerminalRecord | null> {
+  const record = (await liveGetTerminal(id, preferredAccountId)) ?? (await mockGetTerminal(id));
   if (!record) return null;
   const [withOverrides] = await applyDemoOverrides([record]);
   return withOverrides;

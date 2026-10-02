@@ -66,20 +66,14 @@ export async function listAuthorizedAccounts(user: CurrentUser): Promise<PortalA
     CustomerAccount.find(filter).sort({ accountNumber: 1 }).lean(),
     User.findById(user.customerProfileId).select("starlinkVesselId").lean(),
   ]);
-  const fallbackVessel = profileDoc?.starlinkVesselId?.trim() || null;
 
-  return accounts.map((a, i) => {
-    const vessels = [...(a.starlinkVesselIds ?? []).filter(Boolean)];
-    if (vessels.length === 0 && fallbackVessel && i === 0) {
-      vessels.push(fallbackVessel);
+  const profileVesselId = profileDoc?.starlinkVesselId?.trim();
+  return accounts.map((a) => {
+    const portalAcc = toPortalAccount(a);
+    if (profileVesselId && !portalAcc.starlinkVesselIds.includes(profileVesselId)) {
+      portalAcc.starlinkVesselIds.push(profileVesselId);
     }
-    return {
-      id: a._id.toString(),
-      accountNumber: a.accountNumber,
-      name: a.name ?? "",
-      status: a.status ?? "ACTIVE",
-      starlinkVesselIds: vessels,
-    };
+    return portalAcc;
   });
 }
 

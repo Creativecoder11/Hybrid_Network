@@ -78,35 +78,54 @@ async function safe<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
 
 async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
   await connectDB();
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = { "starlinkVesselIds.0": { $exists: true } };
   if (filters?.accountIds) query._id = { $in: filters.accountIds };
   if (filters?.customerId) query.customer = filters.customerId;
   const accounts = await CustomerAccount.find(query).select("accountNumber customer starlinkVesselIds").lean();
 
   const customerIds = Array.from(new Set(accounts.map((a) => a.customer.toString())));
-  const customers = await User.find({ _id: { $in: customerIds } }).select("name company starlinkVesselId").lean();
-  const customerMap = new Map(customers.map((c) => [c._id.toString(), c]));
+  const customers = await User.find({ _id: { $in: customerIds } }).select("name company").lean();
+  const nameById = new Map(customers.map((c) => [c._id.toString(), c.company || c.name]));
 
   const links: LiveLink[] = [];
   const seen = new Set<string>();
   for (const a of accounts) {
-    const cust = customerMap.get(a.customer.toString());
-    const vessels = [...(a.starlinkVesselIds ?? []).filter(Boolean)];
-    if (vessels.length === 0 && cust?.starlinkVesselId) {
-      vessels.push(cust.starlinkVesselId.trim());
-    }
-    for (const vesselId of vessels) {
+    for (const vesselId of a.starlinkVesselIds ?? []) {
       if (!vesselId || seen.has(vesselId)) continue; // one owner per vessel
       seen.add(vesselId);
       links.push({
         accountId: a._id.toString(),
         accountNumber: a.accountNumber,
         customerId: a.customer.toString(),
-        customerName: cust ? cust.company || cust.name : null,
+        customerName: nameById.get(a.customer.toString()) ?? null,
         vesselId,
       });
     }
   }
+
+  // Also check if queried accounts have vessel ID on the customer's User profile
+  if (filters?.accountIds || filters?.customerId) {
+    const accQuery: Record<string, unknown> = {};
+    if (filters?.accountIds) accQuery._id = { $in: filters.accountIds };
+    if (filters?.customerId) accQuery.customer = filters.customerId;
+    const allMatchingAccs = await CustomerAccount.find(accQuery).select("accountNumber customer starlinkVesselIds").lean();
+    for (const acc of allMatchingAccs) {
+      if (!acc.starlinkVesselIds || acc.starlinkVesselIds.length === 0) {
+        const u = await User.findById(acc.customer).select("name company starlinkVesselId").lean();
+        if (u?.starlinkVesselId && !seen.has(u.starlinkVesselId)) {
+          seen.add(u.starlinkVesselId);
+          links.push({
+            accountId: acc._id.toString(),
+            accountNumber: acc.accountNumber,
+            customerId: acc.customer.toString(),
+            customerName: u.company || u.name,
+            vesselId: u.starlinkVesselId,
+          });
+        }
+      }
+    }
+  }
+
   return links;
 }
 
@@ -603,14 +622,33 @@ export async function liveListTerminals(filters?: TerminalListFilters): Promise<
 }
 
 /** Full detail (service plan + location history) for one user terminal. */
-export async function liveGetTerminal(id: string): Promise<TerminalRecord | null> {
+export async function liveGetTerminal(id: string, preferredAccountId?: string | null): Promise<TerminalRecord | null> {
   const allVessels = await getEnrichedVessels();
   const vessel = allVessels?.find((v) => (v.userTerminals ?? []).some((t) => t.userTerminalId === id || t.kitSerialNumber === id));
   if (!vessel) return null;
 
   const account = await safe("load vessel owner", async () => {
     await connectDB();
-    return CustomerAccount.findOne({ starlinkVesselIds: vessel.vesselId }).select("accountNumber customer").lean();
+    if (preferredAccountId) {
+      const preferred = await CustomerAccount.findById(preferredAccountId).select("accountNumber customer starlinkVesselIds").lean();
+      if (preferred) {
+        if (preferred.starlinkVesselIds?.includes(vessel.vesselId)) {
+          return preferred;
+        }
+        const preferredOwner = await User.findById(preferred.customer).select("starlinkVesselId").lean();
+        if (preferredOwner?.starlinkVesselId === vessel.vesselId) {
+          return preferred;
+        }
+      }
+    }
+    const found = await CustomerAccount.findOne({ starlinkVesselIds: vessel.vesselId }).select("accountNumber customer starlinkVesselIds").lean();
+    if (found) return found;
+
+    const userWithVessel = await User.findOne({ starlinkVesselId: vessel.vesselId }).select("_id").lean();
+    if (userWithVessel) {
+      return CustomerAccount.findOne({ customer: userWithVessel._id }).select("accountNumber customer starlinkVesselIds").lean();
+    }
+    return null;
   });
   let link: LiveLink = { accountId: null, accountNumber: null, customerId: null, customerName: null, vesselId: vessel.vesselId };
   if (account) {
