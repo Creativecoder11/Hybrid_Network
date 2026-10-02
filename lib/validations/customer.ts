@@ -25,7 +25,7 @@ export const createCustomerSchema = z.object({
     message: "Account type is required",
   }),
   contactPerson: z.string().optional().default(""),
-  nidTradeLicense: z.string().trim().min(1, "NID / Trade License is required"),
+  nidTradeLicense: z.string().trim().optional().default(""),
   // Customer Account numbers (required, at least 1).
   accountNumbers: z
     .array(accountNumberField)

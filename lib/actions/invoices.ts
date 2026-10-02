@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { isValidObjectId } from "mongoose";
 import { connectDB } from "@/lib/db/connect";
 import { Invoice } from "@/models/Invoice";
 import { User } from "@/models/User";
@@ -422,6 +423,51 @@ export async function purgeInvoiceAction(invoiceId: string): Promise<ActionState
 
   revalidatePath("/admin/billing");
   return { success: "Bill permanently deleted." };
+}
+
+// Bulk variants of delete / purge for the billing list and Trash view. Ids
+// come from the client, so anything that isn't a valid ObjectId is dropped.
+function validInvoiceIds(invoiceIds: string[]): string[] {
+  return Array.from(new Set(invoiceIds)).filter((id) => isValidObjectId(id));
+}
+
+export async function bulkDeleteInvoicesAction(invoiceIds: string[]): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+  const ids = validInvoiceIds(invoiceIds);
+  if (ids.length === 0) return { error: "Select at least one bill." };
+
+  await connectDB();
+  const result = await Invoice.updateMany({ _id: { $in: ids }, deletedAt: null }, { $set: { deletedAt: new Date() } });
+
+  await ActivityLog.create({
+    actor: admin.id,
+    action: "INVOICE_DELETED",
+    meta: { event: "BULK_DELETE", count: result.modifiedCount },
+  });
+
+  revalidatePath("/admin/billing");
+  return { success: `Moved ${result.modifiedCount} bill${result.modifiedCount === 1 ? "" : "s"} to trash.` };
+}
+
+/** Permanently deletes bills that are already in Trash. */
+export async function bulkPurgeInvoicesAction(invoiceIds: string[]): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+  const ids = validInvoiceIds(invoiceIds);
+  if (ids.length === 0) return { error: "Select at least one bill." };
+
+  await connectDB();
+  const result = await Invoice.deleteMany({ _id: { $in: ids }, deletedAt: { $ne: null } });
+
+  await ActivityLog.create({
+    actor: admin.id,
+    action: "INVOICE_PURGED",
+    meta: { event: "BULK_PURGE", count: result.deletedCount },
+  });
+
+  revalidatePath("/admin/billing");
+  return { success: `Permanently deleted ${result.deletedCount} bill${result.deletedCount === 1 ? "" : "s"}.` };
 }
 
 export async function cancelInvoiceAction(invoiceId: string): Promise<ActionState> {

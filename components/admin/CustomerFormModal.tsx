@@ -227,8 +227,8 @@ export function CustomerFormModal({
           <Field label="Contact Person">
             <Input name="contactPerson" defaultValue={customer?.contactPerson} />
           </Field>
-          <Field label="NID / Trade License" required>
-            <Input name="nidTradeLicense" defaultValue={customer?.nidTradeLicense} required />
+          <Field label="NID / Trade License">
+            <Input name="nidTradeLicense" defaultValue={customer?.nidTradeLicense} />
           </Field>
           <Field label="Card Name">
             <Input name="cardName" defaultValue={customer?.cardName} placeholder="e.g. NI-APAC_SUPPORT" />

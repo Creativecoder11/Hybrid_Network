@@ -41,6 +41,7 @@ import {
   bulkMarkPaidAction,
   markPaidAction,
   deleteInvoiceAction,
+  bulkDeleteInvoicesAction,
 } from "@/lib/actions/invoices";
 import { formatCurrency, formatPeriodMonth } from "@/lib/utils/format";
 import type {
@@ -101,6 +102,8 @@ export function BillingPageClient({
   const [editTarget, setEditTarget] = useState<InvoiceListRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InvoiceListRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [searchInput, setSearchInput] = useState(q);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,6 +198,19 @@ export function BillingPageClient({
     else {
       toast.success(result?.success ?? "Bill moved to trash.");
       setDeleteTarget(null);
+      router.refresh();
+    }
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    const result = await bulkDeleteInvoicesAction(Array.from(selected));
+    setBulkDeleting(false);
+    if (result?.error) toast.error(result.error);
+    else {
+      toast.success(result?.success ?? "Bills moved to trash.");
+      setBulkDeleteOpen(false);
+      setSelected(new Set());
       router.refresh();
     }
   }
@@ -385,6 +401,16 @@ export function BillingPageClient({
                 <CheckCircle2 className="size-3.5" />
                 Mark Paid
               </Button>
+              {canDelete && (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => setBulkDeleteOpen(true)}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -555,6 +581,15 @@ export function BillingPageClient({
         loading={!!deleteTarget && deletingId === deleteTarget.id}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
+      />
+      <DeleteConfirmModal
+        open={bulkDeleteOpen}
+        title={`Delete ${selected.size} bill${selected.size === 1 ? "" : "s"}?`}
+        description="These bills will be moved to Trash. You can restore them or delete them permanently from there."
+        confirmLabel="Move to Trash"
+        loading={bulkDeleting}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
       />
     </div>
   );

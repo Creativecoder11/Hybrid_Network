@@ -9,7 +9,10 @@ import {
   Wifi,
   WifiOff,
   Download,
+  Plus,
 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { AddTerminalModal, type AddTerminalOptions } from "@/components/admin/AddTerminalModal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
@@ -49,6 +52,7 @@ export function TerminalsPageClient({
   status,
   faultStatus,
   stats,
+  addOptions,
 }: {
   terminals: TerminalRecord[];
   q: string;
@@ -60,11 +64,14 @@ export function TerminalsPageClient({
     openFaults: number;
     suspended: number;
   };
+  /** Live Starlink details for the Add Terminal form; null when the admin may not add terminals. */
+  addOptions: AddTerminalOptions | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [searchInput, setSearchInput] = useState(q);
+  const [addOpen, setAddOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function updateParams(next: Record<string, string>) {
@@ -113,6 +120,12 @@ export function TerminalsPageClient({
               <Download className="size-3.5" /> Excel
             </button>
           </a>
+          {addOptions && (
+            <Button size="lg" onClick={() => setAddOpen(true)}>
+              <Plus className="size-6" />
+              Add Terminal
+            </Button>
+          )}
         </div>
       </div>
 
@@ -288,6 +301,8 @@ export function TerminalsPageClient({
           </Table>
         </TableContainer>
       )}
+
+      {addOpen && addOptions && <AddTerminalModal options={addOptions} onClose={() => setAddOpen(false)} />}
     </div>
   );
 }
