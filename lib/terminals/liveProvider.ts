@@ -2,7 +2,7 @@ import "server-only";
 import { connectDB } from "@/lib/db/connect";
 import { CustomerAccount } from "@/models/CustomerAccount";
 import { User } from "@/models/User";
-import { getVessel, listVessels } from "@/lib/starlink/vessels";
+import { listVessels } from "@/lib/starlink/vessels";
 import { listTenantUserTerminals } from "@/lib/starlink/inventory";
 import { getVesselDataUsage, getVesselDataUsageHistory, listCurrentDataUsage } from "@/lib/starlink/usage";
 import { getVesselServicePlan } from "@/lib/starlink/service-plans";

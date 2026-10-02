@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-namespace */
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MapPin, Layers, ExternalLink, Loader2 } from "lucide-react";
