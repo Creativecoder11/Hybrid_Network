@@ -17,9 +17,11 @@ import type { SlashVesselLatestTelemetry, SlashVesselLatestTelemetryResponse } f
 // clearly not online now.
 
 const PAGE_SIZE = 1000;
-// Telemetry is ingested continuously; a short shared cache keeps a busy
-// dashboard from re-requesting the fleet on every render.
-const TELEMETRY_REVALIDATE_SECONDS = 30;
+// Telemetry is ingested continuously. The portal device pages refresh every
+// 6 s (LIVE_DEVICE_POLL_INTERVAL_MS); the cache matches so each refresh can
+// see new data, and because it is shared, SLASH gets at most ~10 calls a
+// minute per query however many people are watching.
+const TELEMETRY_REVALIDATE_SECONDS = 6;
 
 export async function listLatestTelemetry(params?: {
   vesselId?: string;

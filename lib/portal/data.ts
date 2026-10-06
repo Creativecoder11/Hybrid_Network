@@ -11,7 +11,6 @@ import type {
   PortalDailyUsageRow,
   PortalPlanInfo,
   PortalServiceLinePlan,
-  PortalUsageHistoryRow,
   PortalUsageInfo,
 } from "@/lib/types/portal";
 
@@ -95,22 +94,6 @@ export async function getUsageForPeriod(accountId: string, periodMonth: string):
   };
 }
 
-/** Last 12 months of CDR-derived usage for the account (database). */
-export async function getUsageHistory(accountId: string): Promise<PortalUsageHistoryRow[]> {
-  await connectDB();
-  const since = new Date();
-  since.setMonth(since.getMonth() - 12);
-  const cutoff = `${since.getFullYear()}${String(since.getMonth() + 1).padStart(2, "0")}`;
-  const records = await UsageRecord.find({ customerAccount: accountId, periodMonth: { $gte: cutoff } })
-    .sort({ periodMonth: 1 })
-    .lean();
-  return records.map((r) => ({
-    periodMonth: r.periodMonth,
-    volumeDataGB: toGB(r.volumeDataBytes),
-    volumeMin: r.volumeMin ?? 0,
-  }));
-}
-
 function nullableNumber(v: number | null | undefined): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
@@ -190,13 +173,21 @@ export async function getServiceLinePlans(account: PortalAccount): Promise<Porta
 }
 
 /** Daily usage for the last `days` days (max 60), summed across the account's service lines (SLASH). */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Daily usage between two UTC days (inclusive), one row per day — days with
+ * no Starlink snapshot come back as zero so the table never skips a date.
+ * The SLASH API allows at most 2 months per request; a calendar month or the
+ * last 30 days both fit.
+ */
 export async function getDailyUsage(
   account: PortalAccount,
-  days = 30
+  range: { start: Date; end: Date }
 ): Promise<{ rows: PortalDailyUsageRow[]; error: string | null }> {
   if (account.starlinkVesselIds.length === 0) return { rows: [], error: null };
-  const end = new Date();
-  const start = new Date(end.getTime() - Math.min(days, 60) * 24 * 60 * 60 * 1000);
+  const start = range.start;
+  const end = range.end;
 
   const results = await Promise.allSettled(
     account.starlinkVesselIds.map((id) => getVesselDataUsageHistory(id, { startDate: start, endDate: end }))
@@ -219,7 +210,15 @@ export async function getDailyUsage(
       byDate.set(date, row);
     }
   }
-  const rows = Array.from(byDate.values())
+  // Every calendar day in the range, newest data never past today.
+  const lastDay = Math.min(end.getTime(), Date.now());
+  for (let t = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()); t <= lastDay; t += DAY_MS) {
+    const date = new Date(t).toISOString().slice(0, 10);
+    if (!byDate.has(date)) byDate.set(date, { date, priorityGB: 0, standardGB: 0, nonBillableGB: 0, totalGB: 0 });
+  }
+  // Only fill when at least one line answered; an outright failure stays empty.
+  const anyLoaded = results.some((r) => r.status === "fulfilled");
+  const rows = (anyLoaded ? Array.from(byDate.values()) : [])
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((r) => ({
       date: r.date,

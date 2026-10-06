@@ -1,30 +1,83 @@
 import type { Metadata } from "next";
 import { BarChart3, AlertTriangle } from "lucide-react";
 import { getPortalContext } from "@/lib/accounts/access";
-import { getDailyUsage, getServiceLinePlans, getUsageHistory } from "@/lib/portal/data";
+import { getDailyUsage, getServiceLinePlans } from "@/lib/portal/data";
 import { Card } from "@/components/ui/Card";
-import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { UsageChart } from "@/components/portal/UsageChart";
 import { DailyUsageChart } from "@/components/portal/DailyUsageChart";
 import { NoAccountState } from "@/components/portal/NoAccountState";
-import { formatDate, formatDateTime, formatPeriodMonth } from "@/lib/utils/format";
+import { UsagePeriodFilter } from "@/components/portal/UsagePeriodFilter";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
   title: "Usage | Hybrid Networks Portal",
 };
 
-export default async function PortalUsagePage() {
+const DAY_MS = 24 * 60 * 60 * 1000;
+// How many years back the month/year filter offers.
+const YEARS_BACK = 2;
+
+/** ?month=MM&year=YYYY → that calendar month (UTC); otherwise the last 30 days. */
+function resolvePeriod(sp: Record<string, string | string[] | undefined>) {
+  const now = new Date();
+  const thisYear = now.getUTCFullYear();
+  const month = Number(sp.month);
+  const year = Number(sp.year);
+  const validMonth = Number.isInteger(month) && month >= 1 && month <= 12;
+  const validYear = Number.isInteger(year) && year >= thisYear - YEARS_BACK && year <= thisYear;
+  if (validMonth && validYear && Date.UTC(year, month - 1, 1) <= now.getTime()) {
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Math.min(Date.UTC(year, month, 1) - 1, now.getTime()));
+    const label = start.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+    return { month, year, start, end, label };
+  }
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return { month: null, year: thisYear, start: new Date(todayStart - 29 * DAY_MS), end: now, label: "Last 30 days" };
+}
+
+function formatDay(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export default async function PortalUsagePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await getPortalContext();
   if (!ctx.account) return <NoAccountState title="Usage" />;
   const account = ctx.account;
 
-  const [daily, serviceLines, history] = await Promise.all([
-    getDailyUsage(account, 30),
+  const period = resolvePeriod(await searchParams);
+  const thisYear = new Date().getUTCFullYear();
+  const years = Array.from({ length: YEARS_BACK + 1 }, (_, i) => thisYear - i);
+
+  const [daily, serviceLines] = await Promise.all([
+    getDailyUsage(account, { start: period.start, end: period.end }),
     getServiceLinePlans(account),
-    getUsageHistory(account.id),
   ]);
   const hasStarlink = account.starlinkVesselIds.length > 0;
+
+  const totals = daily.rows.reduce(
+    (acc, r) => ({
+      priorityGB: acc.priorityGB + r.priorityGB,
+      standardGB: acc.standardGB + r.standardGB,
+      nonBillableGB: acc.nonBillableGB + r.nonBillableGB,
+      totalGB: acc.totalGB + r.totalGB,
+    }),
+    { priorityGB: 0, standardGB: 0, nonBillableGB: 0, totalGB: 0 }
+  );
+  const activeDays = daily.rows.filter((r) => r.totalGB > 0).length;
+  const peak = daily.rows.reduce<(typeof daily.rows)[number] | null>(
+    (best, r) => (r.totalGB > (best?.totalGB ?? 0) ? r : best),
+    null
+  );
 
   return (
     <div className="space-y-6">
@@ -74,56 +127,64 @@ export default async function PortalUsagePage() {
           </div>
 
           <Card className="p-5">
-            <p className="text-base font-semibold text-text-primary">Daily usage — last 30 days</p>
-            <p className="mb-4 text-xs text-text-muted">Live from Starlink, all service lines on this account combined.</p>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-base font-semibold text-text-primary">Daily usage — {period.label}</p>
+                <p className="text-xs text-text-muted">
+                  Live from Starlink, all service lines on this account combined. Days are in UTC.
+                </p>
+              </div>
+              <UsagePeriodFilter month={period.month} year={period.year} years={years} />
+            </div>
             {daily.error && (
               <p className="mb-3 flex items-center gap-2 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-amber">
                 <AlertTriangle className="size-3.5 shrink-0" />
                 {daily.rows.length > 0 ? `Some service lines couldn't be loaded: ${daily.error}` : daily.error}
               </p>
             )}
-            {daily.rows.length > 0 ? (
-              <DailyUsageChart data={daily.rows} />
+            {daily.rows.length > 0 && totals.totalGB > 0 ? (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-line bg-surface-raised p-3">
+                    <p className="text-xs text-text-muted">Total</p>
+                    <p className="text-lg font-semibold text-text-primary">{totals.totalGB.toFixed(2)} GB</p>
+                  </div>
+                  <div className="rounded-xl border border-line bg-surface-raised p-3">
+                    <p className="text-xs text-text-muted">Daily average</p>
+                    <p className="text-lg font-semibold text-text-primary">
+                      {(totals.totalGB / daily.rows.length).toFixed(2)} GB
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-line bg-surface-raised p-3">
+                    <p className="text-xs text-text-muted">Peak day</p>
+                    <p className="text-lg font-semibold text-text-primary">{peak ? `${peak.totalGB.toFixed(2)} GB` : "--"}</p>
+                    {peak && <p className="text-[11px] text-text-muted">{formatDay(peak.date)}</p>}
+                  </div>
+                  <div className="rounded-xl border border-line bg-surface-raised p-3">
+                    <p className="text-xs text-text-muted">Days with usage</p>
+                    <p className="text-lg font-semibold text-text-primary">
+                      {activeDays} / {daily.rows.length}
+                    </p>
+                  </div>
+                </div>
+                <DailyUsageChart data={daily.rows} />
+              </>
             ) : (
-              !daily.error && <p className="py-8 text-center text-sm text-text-muted">No usage data available for the last 30 days.</p>
+              !daily.error && (
+                <p className="py-8 text-center text-sm text-text-muted">No usage recorded for {period.label.toLowerCase()}.</p>
+              )
             )}
           </Card>
+
         </>
       )}
 
-      <div>
-        <p className="text-base font-semibold text-text-primary">Monthly usage history</p>
-        <p className="text-xs text-text-muted">From rated CDR records processed by Hybrid Networks (last 12 months).</p>
-      </div>
-      {history.length === 0 ? (
-        <EmptyState icon={BarChart3} title="No usage data available" description="Monthly usage appears here once rated CDR records are processed for this account." />
-      ) : (
-        <>
-          <Card className="p-5">
-            <UsageChart data={history} />
-          </Card>
-
-          <TableContainer>
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Period</TH>
-                  <TH>Data Used</TH>
-                  <TH>Voice Minutes</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {[...history].reverse().map((r) => (
-                  <TR key={r.periodMonth}>
-                    <TD className="font-medium text-text-primary">{formatPeriodMonth(r.periodMonth)}</TD>
-                    <TD>{r.volumeDataGB.toFixed(2)} GB</TD>
-                    <TD>{r.volumeMin}</TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </TableContainer>
-        </>
+      {!hasStarlink && (
+        <EmptyState
+          icon={BarChart3}
+          title="No usage data available"
+          description="Daily usage appears here once a Starlink service line is linked to this account."
+        />
       )}
     </div>
   );

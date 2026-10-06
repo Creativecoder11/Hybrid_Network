@@ -113,12 +113,6 @@ export type PortalTerminalSummary = {
   terminals: PortalTerminalStatusRow[];
 };
 
-export type PortalUsageHistoryRow = {
-  periodMonth: string;
-  volumeDataGB: number;
-  volumeMin: number;
-};
-
 /** One day of SLASH data-usage/history, summed across the account's service lines. */
 export type PortalDailyUsageRow = {
   date: string;

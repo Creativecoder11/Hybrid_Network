@@ -7,13 +7,15 @@ export function fmtPct(v: number | null | undefined, decimals = 0): string {
   return typeof v === "number" ? `${v.toFixed(decimals)}%` : NOT_AVAILABLE;
 }
 
+/**
+ * Throughput in megabits per second. SLASH's downlinkThroughputMbps /
+ * uplinkThroughputMbps are already Mbps, so no conversion. Always two
+ * decimals (e.g. "9.40 Mbps"); an idle dish reports well under 1 Mbps.
+ */
 export function fmtMbps(v: number | null | undefined): string {
   if (typeof v !== "number") return NOT_AVAILABLE;
-  if (v === 0) return "0.0 dB";
-  if (v < 0.01 && v > 0) return "< 0.01 dB";
-  if (v < 1) return `${v.toFixed(2)} dB`;
-  if (v < 10) return `${v.toFixed(1)} dB`;
-  return `${v.toFixed(0)} dB`;
+  if (v < 0.01 && v > 0) return "< 0.01 Mbps";
+  return `${v.toFixed(2)} Mbps`;
 }
 
 export function fmtMs(v: number | null | undefined): string {

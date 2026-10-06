@@ -8,6 +8,9 @@
 import { useEffect, useRef } from "react";
 
 export const DEFAULT_POLL_INTERVAL_MS = 45_000;
+// Customer portal device pages: 10 refreshes per minute. Keep in step with
+// TELEMETRY_REVALIDATE_SECONDS in lib/starlink/telemetry.ts.
+export const LIVE_DEVICE_POLL_INTERVAL_MS = 6_000;
 
 export function usePolling(callback: () => void, intervalMs: number = DEFAULT_POLL_INTERVAL_MS, enabled = true) {
   const callbackRef = useRef(callback);

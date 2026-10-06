@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LocationMap } from "@/components/ui/LocationMap";
 import { FreshnessIndicator } from "@/components/ui/FreshnessIndicator";
 import { TerminalStatusDot } from "@/components/portal/TerminalStatusDot";
-import { usePolling } from "@/lib/hooks/usePolling";
+import { LIVE_DEVICE_POLL_INTERVAL_MS, usePolling } from "@/lib/hooks/usePolling";
 import { formatDateTime, formatGB } from "@/lib/utils/format";
 import { fmtMbps, fmtMs, fmtPct, fmtText, fmtUptime, NOT_AVAILABLE } from "@/lib/utils/telemetry";
 import type { EnrichedAlert } from "@/lib/terminals/alerts";
@@ -62,7 +62,7 @@ export function DeviceDetailClient({
   locationEnabled: boolean;
 }) {
   const router = useRouter();
-  usePolling(() => router.refresh(), 45_000, !!terminal.sourceVesselId);
+  usePolling(() => router.refresh(), LIVE_DEVICE_POLL_INTERVAL_MS, !!terminal.sourceVesselId);
   const online = terminal.live.onlineStatus === "ONLINE";
   const live = (v: string) => (online ? v : "--");
   const name = terminal.activation.displayName || terminal.identification.serialNumber;
