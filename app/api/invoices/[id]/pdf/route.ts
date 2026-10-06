@@ -6,7 +6,7 @@ import { Invoice } from "@/models/Invoice";
 import { listAuthorizedAccounts } from "@/lib/accounts/access";
 import { CUSTOMER_VISIBLE_STATUSES } from "@/lib/portal/billing";
 import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
-import { renderInvoicePdf } from "@/lib/pdf/render";
+import { describePdfError, renderInvoicePdf } from "@/lib/pdf/render";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthorizedUser();
@@ -39,12 +39,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const pdfData = await buildInvoicePdfData(id);
-  if (!pdfData) {
-    return NextResponse.json({ success: false, error: "Could not build the invoice." }, { status: 500 });
+  let pdfBuffer: Buffer;
+  try {
+    const pdfData = await buildInvoicePdfData(id);
+    if (!pdfData) {
+      return NextResponse.json({ success: false, error: "Could not build the invoice." }, { status: 500 });
+    }
+    pdfBuffer = await renderInvoicePdf(pdfData);
+  } catch (err) {
+    console.error(`[invoices] PDF render failed for ${invoice.invoiceNumber}:`, err);
+    // Admins get the reason so a hosting problem can be fixed; customers get a plain message.
+    const error = isAdmin
+      ? describePdfError(err)
+      : "This invoice PDF can't be generated right now. Please try again later or contact support.";
+    return NextResponse.json({ success: false, error }, { status: 500 });
   }
-
-  const pdfBuffer = await renderInvoicePdf(pdfData);
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

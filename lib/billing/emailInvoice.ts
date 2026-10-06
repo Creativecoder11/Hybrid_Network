@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/db/connect";
 import { Invoice } from "@/models/Invoice";
 import { User } from "@/models/User";
 import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
-import { renderInvoicePdf } from "@/lib/pdf/render";
+import { describePdfError, renderInvoicePdf } from "@/lib/pdf/render";
 import { describeMailError, sendMail } from "@/lib/email/mailer";
 import { invoiceEmailHtml } from "@/emails/templates";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -31,7 +31,7 @@ export async function emailInvoiceToCustomer(invoiceId: string): Promise<{ deliv
     pdfBuffer = await renderInvoicePdf(pdfData);
   } catch (err) {
     console.error(`[invoices] PDF generation failed for ${invoice.invoiceNumber}:`, err);
-    throw new InvoiceEmailError("Couldn't generate the invoice PDF. Check the server logs for details.");
+    throw new InvoiceEmailError(describePdfError(err));
   }
 
   const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoiceId}`;
