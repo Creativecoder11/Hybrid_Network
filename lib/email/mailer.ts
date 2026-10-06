@@ -49,3 +49,22 @@ export async function sendMail(options: {
 
   return { delivered: true, devMode: false };
 }
+
+/**
+ * Admin-facing explanation of a failed send, without credentials or raw
+ * server output. The full error should still be logged server-side.
+ */
+export function describeMailError(err: unknown): string {
+  const e = (err ?? {}) as { code?: string; responseCode?: number; command?: string };
+  if (e.code === "EAUTH") return "The email server rejected the SMTP username or password (SMTP_USER / SMTP_PASS).";
+  if (e.code === "ECONNECTION" || e.code === "ETIMEDOUT" || e.code === "ESOCKET" || e.code === "EDNS") {
+    return "Couldn't connect to the email server. Check SMTP_HOST and SMTP_PORT.";
+  }
+  if (e.code === "EENVELOPE" || e.command === "MAIL FROM" || e.responseCode === 553) {
+    return "The email server refused the sender address. EMAIL_FROM must be a mailbox the SMTP account is allowed to send as.";
+  }
+  if (e.command === "RCPT TO" || e.responseCode === 550) {
+    return "The email server refused the customer's email address.";
+  }
+  return "The email server couldn't send the message. Check the server logs for details.";
+}

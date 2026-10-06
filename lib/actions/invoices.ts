@@ -17,11 +17,9 @@ import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateInvoiceNumber } from "@/lib/utils/ids";
 import { computeInvoiceLineItems } from "@/lib/billing/calc";
 import { roundCurrency } from "@/lib/billing/money";
-import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
-import { renderInvoicePdf } from "@/lib/pdf/render";
-import { emailInvoiceToCustomer } from "@/lib/billing/emailInvoice";
-import { sendMail } from "@/lib/email/mailer";
-import { invoiceEmailHtml, invoiceReminderEmailHtml } from "@/emails/templates";
+import { emailInvoiceToCustomer, InvoiceEmailError } from "@/lib/billing/emailInvoice";
+import { describeMailError, sendMail } from "@/lib/email/mailer";
+import { invoiceReminderEmailHtml } from "@/emails/templates";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { createInvoiceSchema, markPaidSchema, updateInvoiceSchema } from "@/lib/validations/invoice";
 import type { ActionState } from "@/lib/actions/customers";
@@ -182,44 +180,31 @@ export async function createInvoiceAction(
 export async function sendInvoiceAction(invoiceId: string): Promise<ActionState> {
   const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
   if (!admin) return { error: "You're not authorized to perform this action." };
+  if (!isValidObjectId(invoiceId)) return { error: "Invoice not found." };
 
   await connectDB();
-  const invoice = await Invoice.findById(invoiceId);
+  const invoice = await Invoice.findById(invoiceId).select("invoiceNumber status customer customerAccount").lean();
   if (!invoice) return { error: "Invoice not found." };
   if (invoice.status === "PAID" || invoice.status === "CANCELLED") {
     return { error: `This invoice is already ${invoice.status.toLowerCase()}.` };
   }
 
-  const customer = await User.findById(invoice.customer);
-  if (!customer) return { error: "Customer not found." };
-
-  const pdfData = await buildInvoicePdfData(invoiceId);
-  if (!pdfData) return { error: "Could not build the invoice PDF." };
-
-  const pdfBuffer = await renderInvoicePdf(pdfData);
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/bills/${invoiceId}`;
-
-  await sendMail({
-    to: customer.email,
-    subject: `Invoice ${invoice.invoiceNumber} from Hybrid Networks`,
-    html: invoiceEmailHtml({
-      name: customer.name,
-      invoiceNumber: invoice.invoiceNumber,
-      amount: formatCurrency(invoice.total, invoice.currency),
-      dueDate: formatDate(invoice.dueDate),
-      portalUrl,
-    }),
-    attachments: [{ filename: `${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
-  });
-
-  invoice.status = invoice.dueDate.getTime() < Date.now() ? "OVERDUE" : "DUE";
-  invoice.sentAt = new Date();
-  invoice.pdfGeneratedAt = new Date();
-  await invoice.save();
+  // Never let a PDF or SMTP failure escape: in production an uncaught error
+  // reaches the browser only as an opaque 500 "Server Components render" error.
+  let mail: { delivered: boolean; to: string };
+  try {
+    mail = await emailInvoiceToCustomer(invoiceId);
+  } catch (err) {
+    if (!(err instanceof InvoiceEmailError)) console.error(`[invoices] send failed for ${invoice.invoiceNumber}:`, err);
+    return { error: err instanceof InvoiceEmailError ? err.message : "Couldn't send the invoice. Check the server logs for details." };
+  }
+  if (!mail.delivered) {
+    return { error: "Email isn't configured on this server (SMTP_HOST is not set), so the invoice was not sent." };
+  }
 
   await ActivityLog.create({
     actor: admin.id,
-    targetCustomer: customer._id,
+    targetCustomer: invoice.customer,
     targetAccount: invoice.customerAccount ?? null,
     action: "INVOICE_SENT",
     meta: { invoiceNumber: invoice.invoiceNumber },
@@ -227,7 +212,7 @@ export async function sendInvoiceAction(invoiceId: string): Promise<ActionState>
 
   revalidatePath("/admin/billing");
   revalidatePath(`/admin/billing/${invoiceId}`);
-  return { success: `Invoice sent to ${customer.email}.` };
+  return { success: `Invoice sent to ${mail.to}.` };
 }
 
 export async function markPaidAction(
@@ -484,23 +469,32 @@ export async function bulkSendRemindersAction(invoiceIds: string[]): Promise<Act
   });
 
   let sent = 0;
+  let firstError: string | null = null;
   for (const invoice of invoices) {
     const customer = await User.findById(invoice.customer);
     if (!customer) continue;
 
     const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoice._id.toString()}`;
-    await sendMail({
-      to: customer.email,
-      subject: `Payment reminder: Invoice ${invoice.invoiceNumber}`,
-      html: invoiceReminderEmailHtml({
-        name: customer.name,
-        invoiceNumber: invoice.invoiceNumber,
-        amount: formatCurrency(invoice.total, invoice.currency),
-        dueDate: formatDate(invoice.dueDate),
-        portalUrl,
-      }),
-    });
-    sent++;
+    try {
+      const mail = await sendMail({
+        to: customer.email,
+        subject: `Payment reminder: Invoice ${invoice.invoiceNumber}`,
+        html: invoiceReminderEmailHtml({
+          name: customer.name,
+          invoiceNumber: invoice.invoiceNumber,
+          amount: formatCurrency(invoice.total, invoice.currency),
+          dueDate: formatDate(invoice.dueDate),
+          portalUrl,
+        }),
+      });
+      if (!mail.delivered) {
+        return { error: "Email isn't configured on this server (SMTP_HOST is not set), so no reminders were sent." };
+      }
+      sent++;
+    } catch (err) {
+      console.error(`[invoices] reminder failed for ${invoice.invoiceNumber} to ${customer.email}:`, err);
+      firstError ??= describeMailError(err);
+    }
   }
 
   await ActivityLog.create({
@@ -510,6 +504,9 @@ export async function bulkSendRemindersAction(invoiceIds: string[]): Promise<Act
   });
 
   revalidatePath("/admin/billing");
+  if (firstError) {
+    return { error: sent > 0 ? `Sent ${sent} reminder(s), but some failed: ${firstError}` : firstError };
+  }
   return { success: `Sent ${sent} reminder${sent === 1 ? "" : "s"}.` };
 }
 
