@@ -8,5 +8,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { runBootMigrations } = await import("./lib/migrations/boot");
     await runBootMigrations();
+    if (process.env.NEXT_PHASE !== "phase-production-build") {
+      const { startRecurringInvoiceTimer } = await import("./lib/billing/recurring");
+      startRecurringInvoiceTimer();
+    }
   }
 }

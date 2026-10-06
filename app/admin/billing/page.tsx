@@ -6,6 +6,7 @@ import { Subscription } from "@/models/Subscription";
 import { UsageRecord } from "@/models/UsageRecord";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { syncOverdueStatuses } from "@/lib/billing/statusSync";
+import { runDueRecurringInvoicesSafely } from "@/lib/billing/recurring";
 import { getBillingStats, buildPlanSpecLabel } from "@/lib/billing/billingStats";
 import { BillingPageClient } from "@/components/admin/BillingPageClient";
 import type { BillableCustomerOption, InvoiceListRow, TrashedInvoiceRow } from "@/lib/types/billing";
@@ -28,6 +29,7 @@ export default async function BillingPage({
   const q = typeof sp.q === "string" ? sp.q : "";
   const sort = typeof sp.sort === "string" ? sp.sort : "date_desc";
 
+  await runDueRecurringInvoicesSafely();
   await syncOverdueStatuses();
   await connectDB();
 

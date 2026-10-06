@@ -82,3 +82,25 @@ export type BillingStats = {
   cycleLabel: string;
   cycleDaysLeft: number;
 };
+
+export type RecurringInvoiceRow = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  accountNumber: string;
+  description: string;
+  amount: number;
+  currency: string;
+  termMonths: number;
+  cyclesGenerated: number;
+  billingDay: number;
+  paymentTermsDays: number;
+  autoSend: boolean;
+  startDate: string;
+  nextIssueDate: string | null;
+  // Expected date of the final invoice (moves later if the schedule is paused).
+  endDate: string | null;
+  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED";
+  lastError: string;
+  createdAt: string;
+};

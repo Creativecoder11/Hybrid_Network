@@ -19,6 +19,7 @@ import { computeInvoiceLineItems } from "@/lib/billing/calc";
 import { roundCurrency } from "@/lib/billing/money";
 import { buildInvoicePdfData } from "@/lib/billing/invoiceData";
 import { renderInvoicePdf } from "@/lib/pdf/render";
+import { emailInvoiceToCustomer } from "@/lib/billing/emailInvoice";
 import { sendMail } from "@/lib/email/mailer";
 import { invoiceEmailHtml, invoiceReminderEmailHtml } from "@/emails/templates";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -151,31 +152,8 @@ export async function createInvoiceAction(
 
   // Automatically email the invoice PDF to the customer
   try {
-    const pdfData = await buildInvoicePdfData(invoice._id.toString());
-    if (pdfData) {
-      const pdfBuffer = await renderInvoicePdf(pdfData);
-      const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/bills/${invoice._id.toString()}`;
-
-      const mail = await sendMail({
-        to: customer.email,
-        subject: `Invoice ${invoice.invoiceNumber} from Hybrid Networks`,
-        html: invoiceEmailHtml({
-          name: customer.name,
-          invoiceNumber: invoice.invoiceNumber,
-          amount: formatCurrency(invoice.total, invoice.currency),
-          dueDate: formatDate(invoice.dueDate),
-          portalUrl,
-        }),
-        attachments: [{ filename: `${invoice.invoiceNumber}.pdf`, content: pdfBuffer }],
-      });
-
-      invoice.sentAt = new Date();
-      invoice.pdfGeneratedAt = new Date();
-      if (invoice.status === "DRAFT") {
-        invoice.status = invoice.dueDate.getTime() < Date.now() ? "OVERDUE" : "DUE";
-      }
-      await invoice.save();
-
+    const mail = await emailInvoiceToCustomer(invoice._id.toString());
+    if (mail) {
       await ActivityLog.create({
         actor: admin.id,
         targetCustomer: customer._id,

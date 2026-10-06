@@ -40,6 +40,10 @@ export const ACTIVITY_ACTIONS = [
   "INVOICE_DELETED",
   "INVOICE_RESTORED",
   "INVOICE_PURGED",
+  "RECURRING_INVOICE_CREATED",
+  "RECURRING_INVOICE_PAUSED",
+  "RECURRING_INVOICE_RESUMED",
+  "RECURRING_INVOICE_CANCELLED",
   "TICKET_CREATED",
   "TICKET_REPLIED",
   "TICKET_STATUS_CHANGED",
@@ -81,6 +85,15 @@ const ActivityLogSchema = new Schema(
 ActivityLogSchema.index({ createdAt: -1 });
 
 export type ActivityLogDoc = InferSchemaType<typeof ActivityLogSchema>;
+
+// A long-running server (dev hot reload) can hold a model compiled with an
+// older action list, which rejects newly added actions. Recompile it then.
+const cachedActions = (
+  mongoose.models.ActivityLog?.schema.path("action") as { options?: { enum?: readonly string[] } } | undefined
+)?.options?.enum;
+if (cachedActions && ACTIVITY_ACTIONS.some((a) => !cachedActions.includes(a))) {
+  mongoose.deleteModel("ActivityLog");
+}
 
 export const ActivityLog: Model<ActivityLogDoc> =
   (mongoose.models.ActivityLog as Model<ActivityLogDoc>) ||

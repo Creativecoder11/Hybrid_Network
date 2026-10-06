@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getPortalContext } from "@/lib/accounts/access";
 import { syncOverdueStatuses } from "@/lib/billing/statusSync";
+import { runDueRecurringInvoicesSafely } from "@/lib/billing/recurring";
 import { listAccountInvoices } from "@/lib/portal/billing";
 import { PortalBillsClient } from "@/components/portal/PortalBillsClient";
 import { NoAccountState } from "@/components/portal/NoAccountState";
@@ -20,6 +21,7 @@ export default async function PortalBillsPage({
   const sp = await searchParams;
   const status = typeof sp.status === "string" ? sp.status : "ALL";
 
+  await runDueRecurringInvoicesSafely();
   await syncOverdueStatuses();
   const rows = await listAccountInvoices(ctx.account, { status: status === "ALL" ? undefined : status });
 

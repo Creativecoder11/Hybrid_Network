@@ -14,6 +14,7 @@ import {
   Eye,
   Pencil,
   Trash2,
+  Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -245,6 +246,10 @@ export function BillingPageClient({
               Trash
             </Button>
           )}
+          <Button variant="outline" onClick={() => router.push("/admin/billing/recurring")}>
+            <Repeat className="size-4" />
+            Recurring
+          </Button>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" />
             Add New Bill
