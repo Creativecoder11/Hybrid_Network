@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
-import { User } from "@/models/User";
+import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
 import { getSupportTicketStats } from "@/lib/support/ticketStats";
 import { AdminSupportClient } from "@/components/admin/AdminSupportClient";
-import type { AgentOption, TicketRow } from "@/lib/types/support";
+import type { AgentOption, TicketCustomerOption, TicketRow } from "@/lib/types/support";
 
 export const metadata: Metadata = {
   title: "Support | Hybrid Networks Admin",
@@ -29,19 +29,25 @@ export default async function AdminSupportPage({
   const sortSpec: Record<string, 1 | -1> =
     sort === "date_asc" ? { createdAt: 1 } : { createdAt: -1 };
 
-  const [tickets, stats, agents] = await Promise.all([
+  const [tickets, stats, agents, customers] = await Promise.all([
     SupportTicket.find(filter)
       .sort(sortSpec)
       .populate("customer")
       .populate("assignedTo")
+      .populate("openedBy", "role")
       .lean(),
     getSupportTicketStats(),
     User.find({ role: { $in: ["SUPER_ADMIN", "SUB_ADMIN"] } }).sort({ name: 1 }).lean(),
+    User.find({ ...CUSTOMER_PROFILE_FILTER, status: { $ne: "SUSPENDED" } })
+      .select("name company customerId")
+      .sort({ name: 1 })
+      .lean(),
   ]);
 
   let rows: TicketRow[] = tickets.map((t) => {
     const customer = t.customer as unknown as { _id: string; name: string; customerCode?: string } | null;
     const assignee = t.assignedTo as unknown as { _id: string; name: string } | null;
+    const opener = t.openedBy as unknown as { role: string } | null;
     return {
       id: t._id.toString(),
       ticketNumber: t.ticketNumber,
@@ -52,6 +58,7 @@ export default async function AdminSupportPage({
       subject: t.subject,
       status: t.status,
       replyCount: t.replies?.length ?? 0,
+      openedByAdmin: Boolean(opener && opener.role !== "CUSTOMER"),
       assignedToId: assignee?._id?.toString() ?? "",
       assignedToName: assignee?.name ?? "",
       createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",
@@ -74,6 +81,11 @@ export default async function AdminSupportPage({
   const paged = rows.slice((page - 1) * pageSize, page * pageSize);
 
   const agentOptions: AgentOption[] = agents.map((a) => ({ id: a._id.toString(), name: a.name }));
+  const customerOptions: TicketCustomerOption[] = customers.map((c) => ({
+    id: c._id.toString(),
+    name: c.company || c.name,
+    code: c.customerId ?? "",
+  }));
 
   return (
     <AdminSupportClient
@@ -86,6 +98,7 @@ export default async function AdminSupportPage({
       sort={sort}
       stats={stats}
       agents={agentOptions}
+      customers={customerOptions}
     />
   );
 }

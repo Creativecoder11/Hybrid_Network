@@ -20,6 +20,7 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
   const ticket = await SupportTicket.findById(id)
     .populate("customer")
     .populate("assignedTo")
+    .populate("openedBy", "name role")
     .populate("replies.author")
     .lean();
   if (!ticket) notFound();
@@ -30,6 +31,8 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
 
   const customer = ticket.customer as unknown as { _id: string; name: string; customerCode?: string } | null;
   const assignee = ticket.assignedTo as unknown as { _id: string; name: string } | null;
+  const opener = ticket.openedBy as unknown as { name: string; role: string } | null;
+  const openedByAdmin = Boolean(opener && opener.role !== "CUSTOMER");
 
   const detail: TicketDetail = {
     id: ticket._id.toString(),
@@ -42,6 +45,8 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
     status: ticket.status,
     message: ticket.message,
     replyCount: ticket.replies.length,
+    openedByAdmin,
+    openedByName: opener?.name ?? customer?.name ?? "Unknown",
     assignedToId: assignee?._id?.toString() ?? "",
     assignedToName: assignee?.name ?? "",
     createdAt: (ticket.createdAt as Date | undefined)?.toISOString() ?? "",

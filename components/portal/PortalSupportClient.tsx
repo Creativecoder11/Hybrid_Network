@@ -54,6 +54,7 @@ export function PortalSupportClient({ tickets }: { tickets: TicketRow[] }) {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-text-primary">{t.subject}</p>
                     <Badge tone={STATUS_TONE[t.status]}>{t.status.replace("_", " ")}</Badge>
+                    {t.openedByAdmin && <Badge tone="neutral">From Support Team</Badge>}
                   </div>
                   <p className="mt-1 text-xs text-text-muted">
                     {t.ticketNumber} · {formatDateTime(t.updatedAt)} · {t.replyCount} repl

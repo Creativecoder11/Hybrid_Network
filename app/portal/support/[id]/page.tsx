@@ -19,8 +19,14 @@ export default async function PortalTicketDetailPage({ params }: { params: Promi
 
   if (!isValidObjectId(id)) notFound();
   await connectDB();
-  const ticket = await SupportTicket.findById(id).populate("replies.author").lean();
+  const ticket = await SupportTicket.findById(id)
+    .populate("openedBy", "name role")
+    .populate("replies.author")
+    .lean();
   if (!ticket || ticket.customer.toString() !== user.customerProfileId) notFound();
+
+  const opener = ticket.openedBy as unknown as { name: string; role: string } | null;
+  const openedByAdmin = Boolean(opener && opener.role !== "CUSTOMER");
 
   const detail: TicketDetail = {
     id: ticket._id.toString(),
@@ -33,6 +39,8 @@ export default async function PortalTicketDetailPage({ params }: { params: Promi
     status: ticket.status,
     message: ticket.message,
     replyCount: ticket.replies.length,
+    openedByAdmin,
+    openedByName: opener?.name ?? user.name,
     assignedToId: "",
     assignedToName: "",
     createdAt: (ticket.createdAt as Date | undefined)?.toISOString() ?? "",

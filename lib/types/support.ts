@@ -8,6 +8,8 @@ export type TicketRow = {
   subject: string;
   status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
   replyCount: number;
+  // True when an admin opened the ticket on the customer's behalf.
+  openedByAdmin: boolean;
   assignedToId: string;
   assignedToName: string;
   createdAt: string;
@@ -15,6 +17,8 @@ export type TicketRow = {
 };
 
 export type AgentOption = { id: string; name: string };
+
+export type TicketCustomerOption = { id: string; name: string; code: string };
 
 export type TicketStats = {
   openCount: number;
@@ -35,6 +39,7 @@ export type TicketReply = {
 };
 
 export type TicketDetail = TicketRow & {
+  openedByName: string;
   message: string;
   replies: TicketReply[];
 };

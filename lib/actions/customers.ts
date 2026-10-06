@@ -255,7 +255,7 @@ export async function updateCustomerAction(
   const data = parsed.data;
 
   await connectDB();
-  const customer = await User.findOne({ _id: id, ...CUSTOMER_PROFILE_FILTER });
+  const customer = await User.findOne({ _id: id, ...CUSTOMER_PROFILE_FILTER }).select("+passwordHash");
   if (!customer) return { error: "Customer not found." };
 
   if (data.email && data.email.toLowerCase() !== customer.email) {
@@ -277,9 +277,18 @@ export async function updateCustomerAction(
     if (taken) return { error: `Customer Account number ${taken.accountNumber} is already in use by another customer.` };
   }
 
+  // The vessel is synced onto the customer's first account below, so that
+  // account must not count as a clash — otherwise every save of an unchanged
+  // vessel fails with "already linked".
   if (data.starlinkVesselId) {
-    const vesselError = await validateVesselIds([data.starlinkVesselId]);
-    if (vesselError) return { error: vesselError };
+    const primary = await CustomerAccount.findOne({ customer: customer._id })
+      .sort({ createdAt: 1 })
+      .select("starlinkVesselIds")
+      .lean();
+    if (!primary?.starlinkVesselIds?.includes(data.starlinkVesselId)) {
+      const vesselError = await validateVesselIds([data.starlinkVesselId], primary?._id.toString());
+      if (vesselError) return { error: vesselError };
+    }
   }
 
   const before = { name: customer.name, email: customer.email, status: customer.status };
@@ -307,12 +316,14 @@ export async function updateCustomerAction(
   }
   if (data.network) customer.network = data.network;
 
-  // The status pills never resurrect an INVITED login into ACTIVE (that only
-  // happens when the customer completes the first-login password change).
-  if (data.status && data.status !== "INVITED" && customer.status !== "INVITED") {
-    customer.status = data.status;
-  } else if (data.status === "SUSPENDED") {
+  // "Suspended" blocks the login. Any other choice lifts a suspension, but a
+  // login that hasn't finished its first password change stays INVITED until
+  // the customer does (same rule as reactivateCustomerAction).
+  const loginPending = customer.mustChangePassword || !customer.passwordHash;
+  if (data.status === "SUSPENDED") {
     customer.status = "SUSPENDED";
+  } else if (data.status) {
+    customer.status = loginPending ? "INVITED" : "ACTIVE";
   }
 
   await customer.save();
@@ -446,6 +457,11 @@ export async function updateCustomerAction(
   revalidatePath("/admin/customers");
   revalidatePath(`/admin/customers/${id}`);
   revalidatePath("/portal", "layout");
+  if (data.status === "ACTIVE" && customer.status === "INVITED") {
+    return {
+      success: "Customer updated. The login stays Invited until the customer signs in and sets their password.",
+    };
+  }
   return { success: "Customer updated." };
 }
 

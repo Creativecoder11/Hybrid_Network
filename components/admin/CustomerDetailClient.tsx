@@ -17,10 +17,11 @@ import {
   UserPlus,
   KeyRound,
   Satellite,
+  LifeBuoy,
 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Tabs } from "@/components/ui/Tabs";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
@@ -29,6 +30,7 @@ import { CustomerFormModal } from "@/components/admin/CustomerFormModal";
 import { UsageHistoryEditModal } from "@/components/admin/UsageHistoryEditModal";
 import { CustomerAccountFormModal } from "@/components/admin/CustomerAccountFormModal";
 import { PortalUserModal } from "@/components/admin/PortalUserModal";
+import { AdminNewTicketModal } from "@/components/admin/AdminNewTicketModal";
 import { DeleteConfirmModal } from "@/components/ui/DeleteConfirmModal";
 import { Switch } from "@/components/ui/Switch";
 import {
@@ -55,6 +57,7 @@ import type {
   PortalUserRow,
   UsageHistoryRow,
 } from "@/lib/types/admin";
+import type { TicketRow } from "@/lib/types/support";
 
 const STATUS_LABEL: Record<CustomerDetail["status"], string> = {
   ACTIVE: "Active",
@@ -117,6 +120,7 @@ export function CustomerDetailClient({
   invoices,
   cdrRecords,
   activity,
+  tickets,
   plans,
   canDelete,
 }: {
@@ -127,6 +131,7 @@ export function CustomerDetailClient({
   invoices: InvoiceRow[];
   cdrRecords: CdrRecordRow[];
   activity: ActivityLogRow[];
+  tickets: TicketRow[];
   plans: PlanOption[];
   canDelete: boolean;
 }) {
@@ -138,6 +143,7 @@ export function CustomerDetailClient({
   const accountNumberById = new Map(accounts.map((a) => [a.id, a.accountNumber]));
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [trackingEnabled, setTrackingEnabled] = useState(customer.trackingEnabled !== false);
 
   async function handleToggleTracking(nextVal: boolean) {
@@ -689,6 +695,64 @@ export function CustomerDetailClient({
               ),
           },
           {
+            key: "support",
+            label: `Support (${tickets.length})`,
+            content: (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-text-muted">
+                    Tickets opened by this customer or by your team on their behalf. Every portal user of this
+                    customer can see and reply to them.
+                  </p>
+                  <Button size="sm" onClick={() => setNewTicketOpen(true)}>
+                    <Plus className="size-4" />
+                    New Ticket
+                  </Button>
+                </div>
+                {tickets.length === 0 ? (
+                  <EmptyState icon={LifeBuoy} title="No support tickets" />
+                ) : (
+                  <TableContainer>
+                    <Table>
+                      <THead>
+                        <TR>
+                          <TH>Ticket ID</TH>
+                          <TH>Subject</TH>
+                          <TH>Opened By</TH>
+                          <TH>Status</TH>
+                          <TH>Assigned To</TH>
+                          <TH>Updated</TH>
+                        </TR>
+                      </THead>
+                      <TBody>
+                        {tickets.map((t) => (
+                          <TR key={t.id}>
+                            <TD className="font-mono text-xs">
+                              <Link href={`/admin/support/${t.id}`} className="font-medium text-accent-blue hover:underline">
+                                #{t.ticketNumber}
+                              </Link>
+                            </TD>
+                            <TD className="max-w-xs text-text-primary">{t.subject}</TD>
+                            <TD>
+                              <Badge tone={t.openedByAdmin ? "blue" : "neutral"}>
+                                {t.openedByAdmin ? "Support Team" : "Customer"}
+                              </Badge>
+                            </TD>
+                            <TD>
+                              <StatusBadge status={t.status} />
+                            </TD>
+                            <TD>{displayOrDash(t.assignedToName)}</TD>
+                            <TD className="whitespace-nowrap text-xs text-text-muted">{formatDateTime(t.updatedAt)}</TD>
+                          </TR>
+                        ))}
+                      </TBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </div>
+            ),
+          },
+          {
             key: "activity",
             label: "Activity Log",
             content:
@@ -791,6 +855,12 @@ export function CustomerDetailClient({
         ]}
       />
 
+      {newTicketOpen && (
+        <AdminNewTicketModal
+          customer={{ id: customer.id, name: customer.company || customer.name, code: customer.customerId ?? "" }}
+          onClose={() => setNewTicketOpen(false)}
+        />
+      )}
       {editOpen && (
         <CustomerFormModal customer={customer} plans={plans} onClose={() => {
           setEditOpen(false);

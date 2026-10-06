@@ -19,6 +19,10 @@ const SupportTicketSchema = new Schema(
   {
     ticketNumber: { type: String, required: true, unique: true },
     customer: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    // Who opened the ticket: a portal user, or an admin opening it on the
+    // customer's behalf. null on tickets created before this field existed
+    // (those were all opened from the portal).
+    openedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     subject: { type: String, required: true },
     message: { type: String, required: true },
     status: { type: String, enum: TICKET_STATUSES, default: "OPEN" },
@@ -36,6 +40,12 @@ SupportTicketSchema.index({ assignedTo: 1 });
 SupportTicketSchema.index({ adminUnread: 1 });
 
 export type SupportTicketDoc = InferSchemaType<typeof SupportTicketSchema>;
+
+// A long-running server (dev hot reload) can hold a model compiled from an
+// older schema, which makes populate("openedBy") throw. Recompile it then.
+if (mongoose.models.SupportTicket && !mongoose.models.SupportTicket.schema.path("openedBy")) {
+  mongoose.deleteModel("SupportTicket");
+}
 
 export const SupportTicket: Model<SupportTicketDoc> =
   (mongoose.models.SupportTicket as Model<SupportTicketDoc>) ||

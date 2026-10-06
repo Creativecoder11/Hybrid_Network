@@ -57,12 +57,13 @@ export function TicketThread({
         {headerExtra}
       </div>
 
-      <Card className="p-4">
+      <Card className={`p-4 ${ticket.openedByAdmin ? "border-accent-blue/30 bg-accent-blue/5" : ""}`}>
         <div className="flex items-start gap-3">
-          <Avatar name={ticket.customerName} size="sm" />
+          <Avatar name={ticket.openedByName} size="sm" />
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-medium text-text-primary">{ticket.customerName}</p>
+              <p className="text-sm font-medium text-text-primary">{ticket.openedByName}</p>
+              {ticket.openedByAdmin && <Badge tone="blue">Support Team</Badge>}
               <p className="text-xs text-text-muted">{formatDateTime(ticket.createdAt)}</p>
             </div>
             <p className="mt-1 text-sm text-text-secondary">{ticket.message}</p>

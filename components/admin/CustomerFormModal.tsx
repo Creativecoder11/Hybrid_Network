@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { CheckCircle2, Mail, AlertTriangle, ArrowRight } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -56,11 +57,22 @@ export function CustomerFormModal({
   const [trackingEnabled, setTrackingEnabled] = useState(customer?.trackingEnabled !== false);
   const [starlinkVesselId, setStarlinkVesselId] = useState(customer?.starlinkVesselId ?? "");
 
+  const errorRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (state?.success && mode === "edit") {
+      toast.success(state.success);
       onClose();
     }
   }, [state, mode, onClose]);
+
+  // The error box sits at the bottom of a long scrolling form; bring it into view.
+  useEffect(() => {
+    if (state?.error) {
+      toast.error(state.error);
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [state]);
 
   // If customer was just created, show the dedicated Success & Email Notification modal
   if (state?.customerCreated) {
@@ -367,7 +379,7 @@ export function CustomerFormModal({
         </div>
 
         {state?.error && (
-          <div className="mt-5 rounded-xl border border-red/30 bg-red/10 px-3.5 py-2.5 text-xs text-red">
+          <div ref={errorRef} className="mt-5 rounded-xl border border-red/30 bg-red/10 px-3.5 py-2.5 text-xs text-red">
             {state.error}
           </div>
         )}

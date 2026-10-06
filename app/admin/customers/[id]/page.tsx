@@ -10,6 +10,7 @@ import { UsageRecord } from "@/models/UsageRecord";
 import { Invoice } from "@/models/Invoice";
 import { CdrRecord } from "@/models/CdrRecord";
 import { ActivityLog } from "@/models/ActivityLog";
+import { SupportTicket } from "@/models/SupportTicket";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { toCustomerRow } from "@/lib/admin/customerRows";
 import { CustomerDetailClient } from "@/components/admin/CustomerDetailClient";
@@ -24,6 +25,7 @@ import type {
   SubscriptionRow,
   UsageHistoryRow,
 } from "@/lib/types/admin";
+import type { TicketRow } from "@/lib/types/support";
 
 export const metadata: Metadata = {
   title: "Customer Detail | Hybrid Networks Admin",
@@ -41,7 +43,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const customer = await User.findOne({ _id: id, ...CUSTOMER_PROFILE_FILTER }).lean();
   if (!customer) notFound();
 
-  const [accounts, subs, usageRecords, invoices, cdrRecords, activity, allPlans, extraUsers] = await Promise.all([
+  const [accounts, subs, usageRecords, invoices, cdrRecords, activity, allPlans, extraUsers, tickets] = await Promise.all([
     CustomerAccount.find({ customer: id }).sort({ createdAt: 1 }).lean(),
     Subscription.find({ customer: id }).populate("plan").sort({ createdAt: -1 }).lean(),
     UsageRecord.find({ customer: id }).sort({ periodMonth: -1 }).lean(),
@@ -50,6 +52,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     ActivityLog.find({ targetCustomer: id }).sort({ createdAt: -1 }).limit(100).populate("actor").lean(),
     ServicePlan.find({ isActive: true }).sort({ name: 1 }).lean(),
     User.find({ role: "CUSTOMER", customerProfile: id }).sort({ createdAt: 1 }).lean(),
+    SupportTicket.find({ customer: id })
+      .sort({ createdAt: -1 })
+      .populate("openedBy", "role")
+      .populate("assignedTo", "name")
+      .lean(),
   ]);
 
   const accountNumberById = new Map(accounts.map((a) => [a._id.toString(), a.accountNumber]));
@@ -120,7 +127,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       accountNumbers: accounts.map((a) => a.accountNumber),
       plan: firstPlan ? { planId: firstPlan._id.toString(), planName: firstPlan.name, staticIp: firstAccountSub?.staticIp ?? "" } : null,
       usage: usageRecords.find((u) => u.periodMonth === currentPeriod) ?? null,
-      starlinkVesselId: customer.starlinkVesselId || accounts[0]?.starlinkVesselIds?.[0] || null,
+      starlinkVesselId: accounts[0]?.starlinkVesselIds?.[0] || null,
     }),
     mustChangePassword: Boolean(customer.mustChangePassword),
     tempPasswordExpiresAt: customer.tempPasswordExpiresAt ? (customer.tempPasswordExpiresAt as Date).toISOString() : null,
@@ -194,6 +201,27 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     createdAt: (a.createdAt as Date | undefined)?.toISOString() ?? "",
   }));
 
+  const ticketRows: TicketRow[] = tickets.map((t) => {
+    const opener = t.openedBy as unknown as { role: string } | null;
+    const assignee = t.assignedTo as unknown as { _id: string; name: string } | null;
+    return {
+      id: t._id.toString(),
+      ticketNumber: t.ticketNumber,
+      customerId: id,
+      customerName: customer.company || customer.name,
+      customerCode: customer.customerId ?? "",
+      category: t.category ?? "GENERAL",
+      subject: t.subject,
+      status: t.status,
+      replyCount: t.replies?.length ?? 0,
+      openedByAdmin: Boolean(opener && opener.role !== "CUSTOMER"),
+      assignedToId: assignee?._id?.toString() ?? "",
+      assignedToName: assignee?.name ?? "",
+      createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",
+      updatedAt: (t.updatedAt as Date | undefined)?.toISOString() ?? "",
+    };
+  });
+
   const plans: PlanOption[] = allPlans.map((p) => ({
     id: p._id.toString(),
     name: p.name,
@@ -213,6 +241,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       invoices={invoiceRows}
       cdrRecords={cdrRows}
       activity={activityRows}
+      tickets={ticketRows}
       plans={plans}
       canDelete={currentUser?.role === "SUPER_ADMIN"}
     />

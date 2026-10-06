@@ -205,3 +205,23 @@ export function slashWriteOperationEmailHtml(params: {
     <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:13px;">${table}</table>
   `);
 }
+
+export function adminTicketOpenedEmailHtml(params: {
+  name: string;
+  ticketNumber: string;
+  subject: string;
+  message: string;
+  portalUrl: string;
+}) {
+  return emailLayout(`
+    <p style="margin:0 0 16px;font-size:20px;color:#F9FAFB;">New support ticket ${escapeHtml(params.ticketNumber)}</p>
+    <p style="margin:0 0 16px;">Hi ${escapeHtml(params.name)},</p>
+    <p style="margin:0 0 16px;">Our support team has opened a ticket on your account:</p>
+    <p style="margin:0 0 8px;font-weight:700;color:#F9FAFB;">${escapeHtml(params.subject)}</p>
+    <p style="margin:0 0 16px;white-space:pre-line;">${escapeHtml(params.message)}</p>
+    ${emailButton("View Ticket", params.portalUrl)}
+    <p style="margin:16px 0 0;color:#9CA3AF;font-size:13px;">
+      You can reply to this ticket from the Support page of your customer portal.
+    </p>
+  `);
+}

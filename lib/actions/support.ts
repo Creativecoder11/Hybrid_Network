@@ -1,12 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { isValidObjectId } from "mongoose";
 import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
 import { ActivityLog } from "@/models/ActivityLog";
+import { User, CUSTOMER_PROFILE_FILTER } from "@/models/User";
+import { sendMail } from "@/lib/email/mailer";
+import { adminTicketOpenedEmailHtml } from "@/emails/templates";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { generateTicketNumber } from "@/lib/utils/ids";
 import {
+  adminCreateTicketSchema,
   createTicketSchema,
   replyTicketSchema,
   updateTicketStatusSchema,
@@ -43,6 +48,7 @@ export async function createTicketAction(
   await SupportTicket.create({
     ticketNumber,
     customer: customerId,
+    openedBy: user.id,
     subject: parsed.data.subject,
     message: parsed.data.message,
     category: parsed.data.category,
@@ -59,6 +65,81 @@ export async function createTicketAction(
   revalidatePath("/portal/support");
   revalidatePath("/admin/support");
   return { success: `Ticket ${ticketNumber} submitted. We'll get back to you soon.` };
+}
+
+/**
+ * Admin opens a ticket on a Customer Profile's behalf. It shows up in the
+ * portal for every user of that profile, who can reply to it like any other.
+ */
+export async function adminCreateTicketAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return { error: "You're not authorized to perform this action." };
+
+  const parsed = adminCreateTicketSchema.safeParse({
+    customerId: str(formData, "customerId"),
+    subject: str(formData, "subject"),
+    message: str(formData, "message"),
+    category: str(formData, "category") || undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Please check the form and try again." };
+  }
+
+  await connectDB();
+  if (!isValidObjectId(parsed.data.customerId)) return { error: "Customer not found." };
+  const customer = await User.findOne({ _id: parsed.data.customerId, ...CUSTOMER_PROFILE_FILTER })
+    .select("name email status")
+    .lean();
+  if (!customer) return { error: "Customer not found." };
+
+  const ticketNumber = await generateTicketNumber();
+  const ticket = await SupportTicket.create({
+    ticketNumber,
+    customer: customer._id,
+    openedBy: admin.id,
+    subject: parsed.data.subject,
+    message: parsed.data.message,
+    category: parsed.data.category,
+    status: "OPEN",
+    // The admin wrote it, so there is nothing new for the admin side to read.
+    adminUnread: false,
+    assignedTo: admin.id,
+  });
+
+  await ActivityLog.create({
+    actor: admin.id,
+    targetCustomer: customer._id,
+    action: "TICKET_CREATED",
+    meta: { ticketNumber, openedByAdmin: true },
+  });
+
+  // Best-effort notification; the ticket is already visible in the portal.
+  if (customer.status !== "SUSPENDED") {
+    try {
+      const portalUrl = `${process.env.CUSTOMER_PORTAL_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/portal/support/${ticket._id.toString()}`;
+      await sendMail({
+        to: customer.email,
+        subject: `Support ticket ${ticketNumber}: ${parsed.data.subject}`,
+        html: adminTicketOpenedEmailHtml({
+          name: customer.name,
+          ticketNumber,
+          subject: parsed.data.subject,
+          message: parsed.data.message,
+          portalUrl,
+        }),
+      });
+    } catch (err) {
+      console.error("[support] failed to email customer about new ticket", err);
+    }
+  }
+
+  revalidatePath("/portal/support");
+  revalidatePath("/admin/support");
+  revalidatePath(`/admin/customers/${customer._id.toString()}`);
+  return { success: `Ticket ${ticketNumber} created for ${customer.name}.` };
 }
 
 export async function replyTicketAction(

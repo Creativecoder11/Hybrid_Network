@@ -13,23 +13,30 @@ export default async function PortalSupportPage() {
   const user = await requireRole(["CUSTOMER"], "/admin");
 
   await connectDB();
-  const tickets = await SupportTicket.find({ customer: user.customerProfileId }).sort({ createdAt: -1 }).lean();
+  const tickets = await SupportTicket.find({ customer: user.customerProfileId })
+    .sort({ createdAt: -1 })
+    .populate("openedBy", "role")
+    .lean();
 
-  const rows: TicketRow[] = tickets.map((t) => ({
-    id: t._id.toString(),
-    ticketNumber: t.ticketNumber,
-    customerId: user.id,
-    customerName: user.name,
-    customerCode: "",
-    category: t.category ?? "GENERAL",
-    subject: t.subject,
-    status: t.status,
-    replyCount: t.replies?.length ?? 0,
-    assignedToId: "",
-    assignedToName: "",
-    createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",
-    updatedAt: (t.updatedAt as Date | undefined)?.toISOString() ?? "",
-  }));
+  const rows: TicketRow[] = tickets.map((t) => {
+    const opener = t.openedBy as unknown as { role: string } | null;
+    return {
+      id: t._id.toString(),
+      ticketNumber: t.ticketNumber,
+      customerId: user.id,
+      customerName: user.name,
+      customerCode: "",
+      category: t.category ?? "GENERAL",
+      subject: t.subject,
+      status: t.status,
+      replyCount: t.replies?.length ?? 0,
+      openedByAdmin: Boolean(opener && opener.role !== "CUSTOMER"),
+      assignedToId: "",
+      assignedToName: "",
+      createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",
+      updatedAt: (t.updatedAt as Date | undefined)?.toISOString() ?? "",
+    };
+  });
 
   return <PortalSupportClient tickets={rows} />;
 }

@@ -75,7 +75,9 @@ export function toCustomerRow(
     imei: c.imei ?? "",
     service: c.service ?? "",
     vendor: c.vendor ?? "",
-    starlinkVesselId: c.starlinkVesselId || extras.starlinkVesselId || "",
+    // The first account's vessel is the source of truth; the profile field is
+    // a legacy copy that can go stale after edits in the Accounts tab.
+    starlinkVesselId: extras.starlinkVesselId || c.starlinkVesselId || "",
     starlinkServiceLineNumber: c.starlinkServiceLineNumber ?? "",
     network: {
       originNumber: c.network?.originNumber ?? "",
