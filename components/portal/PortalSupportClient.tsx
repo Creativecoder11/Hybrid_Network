@@ -52,8 +52,16 @@ export function PortalSupportClient({ tickets }: { tickets: TicketRow[] }) {
               <Card className="flex items-center justify-between p-4 hover:bg-surface-raised">
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-text-primary">{t.subject}</p>
+                    {t.customerUnread && <span className="size-2 shrink-0 rounded-full bg-red" aria-hidden />}
+                    <p className={`text-sm font-medium text-text-primary ${t.customerUnread ? "font-bold" : ""}`}>
+                      {t.subject}
+                    </p>
                     <Badge tone={STATUS_TONE[t.status]}>{t.status.replace("_", " ")}</Badge>
+                    {t.customerUnread && (
+                      <Badge tone="red">
+                        {t.replyCount > 0 ? "New reply" : "New"}
+                      </Badge>
+                    )}
                     {t.openedByAdmin && <Badge tone="neutral">From Support Team</Badge>}
                   </div>
                   <p className="mt-1 text-xs text-text-muted">

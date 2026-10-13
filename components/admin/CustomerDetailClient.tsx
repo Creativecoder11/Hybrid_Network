@@ -732,7 +732,11 @@ export function CustomerDetailClient({
                                 #{t.ticketNumber}
                               </Link>
                             </TD>
-                            <TD className="max-w-xs text-text-primary">{t.subject}</TD>
+                            <TD className="max-w-xs text-text-primary">
+                              <span className="block max-w-xs truncate" title={t.subject}>
+                                {t.subject}
+                              </span>
+                            </TD>
                             <TD>
                               <Badge tone={t.openedByAdmin ? "blue" : "neutral"}>
                                 {t.openedByAdmin ? "Support Team" : "Customer"}

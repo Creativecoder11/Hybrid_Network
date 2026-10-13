@@ -59,6 +59,7 @@ export default async function AdminSupportPage({
       status: t.status,
       replyCount: t.replies?.length ?? 0,
       openedByAdmin: Boolean(opener && opener.role !== "CUSTOMER"),
+      adminUnread: Boolean(t.adminUnread),
       assignedToId: assignee?._id?.toString() ?? "",
       assignedToName: assignee?.name ?? "",
       createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",

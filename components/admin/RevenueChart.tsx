@@ -4,12 +4,15 @@ import { useMemo, useState } from "react";
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   ResponsiveContainer,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { TrendingUp, BarChart3 } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import type { RevenuePoint } from "@/lib/types/dashboard";
@@ -69,9 +72,25 @@ function expandToDailyPoints(months: RevenuePoint[]): DailyPoint[] {
 
 export function RevenueChart({ data }: { data: RevenuePoint[] }) {
   const [months, setMonths] = useState(6);
+  const [chartType, setChartType] = useState<"line" | "bar">("line");
 
   const sliced = data.slice(Math.max(0, data.length - months));
   const chartData = useMemo(() => expandToDailyPoints(sliced), [sliced]);
+  const monthlyBarData = useMemo(
+    () =>
+      sliced.map(({ month, revenue }) => {
+        const year = month.slice(0, 4);
+        const mIdx = Number(month.slice(4, 6)) - 1;
+        const shortMonth = MONTH_ABBR[mIdx] ?? month;
+        return {
+          month,
+          shortLabel: shortMonth,
+          fullLabel: `${shortMonth} ${year}`,
+          revenue: Math.round(revenue),
+        };
+      }),
+    [sliced]
+  );
   const monthTicks = useMemo(() => chartData.filter((d) => d.isMonthStart).map((d) => d.date), [chartData]);
   const monthLabelByDate = useMemo(() => {
     const map = new Map<string, string>();
@@ -83,7 +102,33 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <div className="inline-flex rounded-lg border border-line bg-surface-raised p-0.5">
+          <button
+            type="button"
+            onClick={() => setChartType("line")}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              chartType === "line"
+                ? "bg-accent-green/15 text-accent-green"
+                : "text-text-muted hover:text-text-primary"
+            }`}
+          >
+            <TrendingUp className="size-3.5" />
+            Line
+          </button>
+          <button
+            type="button"
+            onClick={() => setChartType("bar")}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              chartType === "bar"
+                ? "bg-accent-green/15 text-accent-green"
+                : "text-text-muted hover:text-text-primary"
+            }`}
+          >
+            <BarChart3 className="size-3.5" />
+            Bar
+          </button>
+        </div>
         <div>
           <Select
             value={months}
@@ -100,56 +145,99 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
       </div>
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={chartData}
-            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-          >
-            <defs>
-              <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#4ADE80" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="#232A33"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="date"
-              ticks={monthTicks}
-              tickFormatter={(date) => monthLabelByDate.get(date) ?? ""}
-              tick={{ fontSize: 11, fill: "#9CA3AF" }}
-              axisLine={{ stroke: "#232A33" }}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 11, fill: "#9CA3AF" }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v) => `$${Math.round(v)}`}
-            />
-            <Tooltip
-              contentStyle={{
-                background: "#161B22",
-                border: "1px solid #232A33",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelStyle={{ color: "#F3F4F6" }}
-              formatter={(value) => [formatCurrency(Number(value)), "Revenue"]}
-              labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
-            />
-            <Area
-              type="monotone"
-              dataKey="revenue"
-              stroke="#4ADE80"
-              strokeWidth={2}
-              fill="url(#revenueFill)"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </AreaChart>
+          {chartType === "line" ? (
+            <AreaChart
+              data={chartData}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#4ADE80" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#232A33"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="date"
+                ticks={monthTicks}
+                tickFormatter={(date) => monthLabelByDate.get(date) ?? ""}
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={{ stroke: "#232A33" }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `$${Math.round(v)}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "#161B22",
+                  border: "1px solid #232A33",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "#F3F4F6" }}
+                formatter={(value) => [formatCurrency(Number(value)), "Revenue"]}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#4ADE80"
+                strokeWidth={2}
+                fill="url(#revenueFill)"
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          ) : (
+            <BarChart
+              data={monthlyBarData}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#232A33"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="shortLabel"
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={{ stroke: "#232A33" }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `$${Math.round(v)}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "#161B22",
+                  border: "1px solid #232A33",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "#F3F4F6" }}
+                formatter={(value) => [formatCurrency(Number(value)), "Monthly Revenue"]}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullLabel ?? ""}
+              />
+              <Bar
+                dataKey="revenue"
+                fill="#4ADE80"
+                radius={[6, 6, 0, 0]}
+                maxBarSize={48}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          )}
         </ResponsiveContainer>
       </div>
     </div>

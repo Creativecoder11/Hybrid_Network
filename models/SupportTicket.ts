@@ -30,6 +30,7 @@ const SupportTicketSchema = new Schema(
     assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
     resolvedAt: { type: Date, default: null },
     adminUnread: { type: Boolean, default: true },
+    customerUnread: { type: Boolean, default: false },
     replies: { type: [ReplySchema], default: [] },
   },
   { timestamps: true }
@@ -38,12 +39,17 @@ const SupportTicketSchema = new Schema(
 SupportTicketSchema.index({ status: 1 });
 SupportTicketSchema.index({ assignedTo: 1 });
 SupportTicketSchema.index({ adminUnread: 1 });
+SupportTicketSchema.index({ customer: 1, customerUnread: 1 });
 
 export type SupportTicketDoc = InferSchemaType<typeof SupportTicketSchema>;
 
 // A long-running server (dev hot reload) can hold a model compiled from an
-// older schema, which makes populate("openedBy") throw. Recompile it then.
-if (mongoose.models.SupportTicket && !mongoose.models.SupportTicket.schema.path("openedBy")) {
+// older schema, which makes populate("openedBy") or customerUnread queries throw.
+if (
+  mongoose.models.SupportTicket &&
+  (!mongoose.models.SupportTicket.schema.path("openedBy") ||
+    !mongoose.models.SupportTicket.schema.path("customerUnread"))
+) {
   mongoose.deleteModel("SupportTicket");
 }
 

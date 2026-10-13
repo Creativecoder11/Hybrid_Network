@@ -23,6 +23,8 @@ import { logoutAction } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/dal";
 import type { OpenCdrAlert } from "@/lib/cdr/alerts";
 import { AdminAlertBell } from "@/components/admin/AdminAlertBell";
+import { useSupportNotifications } from "@/lib/hooks/useSupportNotifications";
+import type { SupportNotifications } from "@/lib/support/unread";
 
 function baseNav(unreadSupportCount: number): NavItem[] {
   return [
@@ -68,18 +70,20 @@ function baseNav(unreadSupportCount: number): NavItem[] {
 
 export function AdminShell({
   user,
-  unreadSupportCount = 0,
+  supportNotifications,
   cdrAlerts = [],
   cdrAlertCount = 0,
   children,
 }: {
   user: CurrentUser;
-  unreadSupportCount?: number;
+  supportNotifications: SupportNotifications;
   cdrAlerts?: OpenCdrAlert[];
   cdrAlertCount?: number;
   children: ReactNode;
 }) {
   const [, startTransition] = useTransition();
+  const support = useSupportNotifications(supportNotifications);
+  const unreadSupportCount = support.unreadCount;
 
   const navItems: NavItem[] = [
     ...baseNav(unreadSupportCount),
@@ -104,7 +108,7 @@ export function AdminShell({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <AdminAlertBell alerts={cdrAlerts} total={cdrAlertCount} />
+            <AdminAlertBell alerts={cdrAlerts} total={cdrAlertCount} support={support} />
             <div className="flex items-center gap-2.5">
               <Avatar name={user.name} src={user.avatarUrl} size="sm" />
               <div className="hidden text-left sm:block">

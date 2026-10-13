@@ -2,13 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, AlertTriangle } from "lucide-react";
+import { Bell, AlertTriangle, LifeBuoy, MessageSquare } from "lucide-react";
 import { formatDateTime, formatNumber } from "@/lib/utils/format";
 import type { OpenCdrAlert } from "@/lib/cdr/alerts";
+import type { SupportNotifications } from "@/lib/support/unread";
 
-// Admin notifications: uploads with unallocated CDR records that nobody has
-// acknowledged yet (acknowledge from the upload's page).
-export function AdminAlertBell({ alerts, total }: { alerts: OpenCdrAlert[]; total: number }) {
+// Admin notifications: support tickets waiting on the team (new, or the
+// customer replied — cleared by opening the ticket) and uploads with
+// unallocated CDR records nobody has acknowledged yet (acknowledge from the
+// upload's page).
+export function AdminAlertBell({
+  alerts,
+  total: cdrTotal,
+  support,
+}: {
+  alerts: OpenCdrAlert[];
+  total: number;
+  support: SupportNotifications;
+}) {
+  const total = cdrTotal + support.unreadCount;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -31,23 +43,59 @@ export function AdminAlertBell({ alerts, total }: { alerts: OpenCdrAlert[]; tota
       <button
         onClick={() => setOpen((o) => !o)}
         className="relative flex size-9 items-center justify-center rounded-full border border-line text-text-secondary hover:bg-surface-raised"
-        aria-label={total > 0 ? `${total} unallocated CDR alert${total === 1 ? "" : "s"}` : "Notifications"}
+        aria-label={total > 0 ? `${total} notification${total === 1 ? "" : "s"}` : "Notifications"}
         aria-expanded={open}
       >
         <Bell className="size-4" />
         {total > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber px-1 text-[10px] font-bold text-[#1a1203]">
+          <span
+            className={`absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+              support.unreadCount > 0 ? "bg-red text-white" : "bg-amber text-[#1a1203]"
+            }`}
+          >
             {total > 99 ? "99+" : total}
           </span>
         )}
       </button>
       {open && (
         <div className="absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-xl">
-          <p className="border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Alerts</p>
-          {alerts.length === 0 ? (
-            <p className="px-4 py-6 text-center text-xs text-text-muted">No open alerts.</p>
+          <p className="border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Notifications</p>
+          {alerts.length === 0 && support.tickets.length === 0 ? (
+            <p className="px-4 py-6 text-center text-xs text-text-muted">No new notifications.</p>
           ) : (
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto">
+              {support.tickets.map((t) => (
+                <Link
+                  key={`ticket-${t.id}`}
+                  href={`/admin/support/${t.id}`}
+                  onClick={() => setOpen(false)}
+                  className="flex items-start gap-3 border-b border-line-soft px-4 py-3 last:border-0 hover:bg-surface-raised"
+                >
+                  {t.isReply ? (
+                    <MessageSquare className="mt-0.5 size-4 shrink-0 text-red" />
+                  ) : (
+                    <LifeBuoy className="mt-0.5 size-4 shrink-0 text-red" />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block text-sm text-text-primary">
+                      {t.isReply ? "Customer replied" : "New support ticket"} · #{t.ticketNumber}
+                    </span>
+                    <span className="block truncate text-xs text-text-muted">
+                      {t.customerName} · {t.subject}
+                    </span>
+                    <span className="block text-[11px] text-text-muted">{formatDateTime(t.updatedAt)}</span>
+                  </span>
+                </Link>
+              ))}
+              {support.unreadCount > support.tickets.length && (
+                <Link
+                  href="/admin/support"
+                  onClick={() => setOpen(false)}
+                  className="block border-b border-line-soft px-4 py-2.5 text-center text-xs font-medium text-accent-blue hover:bg-surface-raised"
+                >
+                  View all {support.unreadCount} unread tickets
+                </Link>
+              )}
               {alerts.map((a) => (
                 <Link
                   key={`${a.pipeline}-${a.id}`}

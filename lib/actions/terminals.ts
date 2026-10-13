@@ -10,9 +10,52 @@ import { listServiceLines, listTenantUserTerminals } from "@/lib/starlink/invent
 import { StarlinkApiError, friendlyStarlinkErrorMessage } from "@/lib/starlink/client";
 import { createTerminal, addTerminalToServiceLine, type SlashWriteContext } from "@/lib/starlink/passthrough";
 import { getAuthorizedUser } from "@/lib/auth/dal";
-import { sendTerminalCommand, commandLabel } from "@/lib/terminals/service";
+import { sendTerminalCommand, commandLabel, listTerminals } from "@/lib/terminals/service";
 import { REMOTE_COMMANDS, type RemoteCommandType } from "@/lib/terminals/types";
 import type { ActionState } from "@/lib/actions/customers";
+
+export type SelectableTerminalOption = {
+  id: string;
+  serialNumber: string;
+  hardwareId: string;
+  iccid: string;
+  imei: string;
+  displayName: string;
+  serviceLineNumber: string;
+  vesselId: string;
+  vendor: string;
+  onlineStatus: string;
+  assignedCustomerId: string | null;
+  assignedCustomerName: string | null;
+  assignedAccountNumber: string | null;
+};
+
+export async function listSelectableTerminalsAction(): Promise<SelectableTerminalOption[]> {
+  const admin = await getAuthorizedUser(["SUPER_ADMIN", "SUB_ADMIN"]);
+  if (!admin) return [];
+
+  try {
+    const terminals = await listTerminals();
+    return terminals.map((t) => ({
+      id: t.id,
+      serialNumber: t.identification.serialNumber,
+      hardwareId: t.identification.hardwareId,
+      iccid: t.identification.iccid || t.identification.serialNumber,
+      imei: t.identification.imei || t.identification.hardwareId,
+      displayName: t.activation.displayName || t.identification.serialNumber,
+      serviceLineNumber: t.activation.serviceLineNumber || "",
+      vesselId: t.sourceVesselId || "",
+      vendor: t.product.manufacturer === "SpaceX" ? "Starlink" : t.product.manufacturer || "Starlink",
+      onlineStatus: t.live.onlineStatus,
+      assignedCustomerId: t.activation.assignedCustomerId,
+      assignedCustomerName: t.activation.assignedCustomerName,
+      assignedAccountNumber: t.activation.assignedAccountNumber,
+    }));
+  } catch (err) {
+    console.error("[admin] listSelectableTerminalsAction failed:", err);
+    return [];
+  }
+}
 
 export async function sendTerminalCommandAction(
   terminalId: string,

@@ -10,6 +10,10 @@ export type TicketRow = {
   replyCount: number;
   // True when an admin opened the ticket on the customer's behalf.
   openedByAdmin: boolean;
+  // Waiting on the admin team (new ticket or customer reply). Admin views only.
+  adminUnread?: boolean;
+  // Waiting on the customer (admin opened or admin replied). Customer views only.
+  customerUnread?: boolean;
   assignedToId: string;
   assignedToName: string;
   createdAt: string;

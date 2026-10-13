@@ -91,3 +91,65 @@ export function displayOrDash(value: string | number | null | undefined): string
   if (value === null || value === undefined || value === "") return "--";
   return String(value);
 }
+
+/**
+ * Formats raw Starlink service plan names and SKU product reference IDs
+ * (e.g. "nl-enterprise-local-priority-terminal-access-fee-eur") into clean,
+ * professional display names (e.g. "Starlink Enterprise Local Priority").
+ */
+export function formatServicePlanName(rawPlan?: string | null, fallback = ""): string {
+  if (!rawPlan || !rawPlan.trim()) return fallback;
+
+  const trimmed = rawPlan.trim();
+
+  // If already a nice human-readable string without dash-slugs, return as is
+  if (!trimmed.includes("-") && !trimmed.includes("_")) {
+    return trimmed;
+  }
+
+  // Known specific mappings
+  const knownMappings: Record<string, string> = {
+    "nl-enterprise-local-priority-terminal-access-fee-eur": "Starlink Enterprise Local Priority",
+    "enterprise-local-priority-terminal-access-fee": "Starlink Enterprise Local Priority",
+    "mobile-priority-50gb": "Starlink Mobile Priority 50GB",
+    "mobile-priority-1tb": "Starlink Mobile Priority 1TB",
+    "mobile-priority-5tb": "Starlink Mobile Priority 5TB",
+    "priority-50gb": "Starlink Priority 50GB",
+    "priority-1tb": "Starlink Priority 1TB",
+    "priority-2tb": "Starlink Priority 2TB",
+    "standard-unlimited": "Starlink Standard Unlimited",
+  };
+
+  const lower = trimmed.toLowerCase();
+  if (knownMappings[lower]) {
+    return knownMappings[lower];
+  }
+
+  // Generic heuristic cleanup for Starlink SKUs:
+  // e.g. "nl-enterprise-local-priority-terminal-access-fee-eur"
+  let cleaned = lower
+    .replace(/^[a-z]{2}-/, "") // strip region prefix e.g. nl-, us-, au-
+    .replace(/-(eur|usd|myr|aud|gbp|cad|sgd|nzd)$/, "") // strip currency suffix
+    .replace(/-terminal-access-fee$/, "") // strip terminal-access-fee suffix
+    .replace(/-access-fee$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+
+  // Title-case each word and preserve units (GB, TB, Mbps)
+  cleaned = cleaned
+    .split(" ")
+    .map((word) => {
+      if (/^\d+(gb|tb|mbps)$/i.test(word)) {
+        return word.toUpperCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+
+  if (!cleaned.toLowerCase().includes("starlink")) {
+    cleaned = `Starlink ${cleaned}`;
+  }
+
+  return cleaned || trimmed;
+}
+

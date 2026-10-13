@@ -53,6 +53,8 @@ export async function createTicketAction(
     message: parsed.data.message,
     category: parsed.data.category,
     status: "OPEN",
+    adminUnread: true,
+    customerUnread: false,
   });
 
   await ActivityLog.create({
@@ -106,6 +108,7 @@ export async function adminCreateTicketAction(
     status: "OPEN",
     // The admin wrote it, so there is nothing new for the admin side to read.
     adminUnread: false,
+    customerUnread: true,
     assignedTo: admin.id,
   });
 
@@ -168,9 +171,11 @@ export async function replyTicketAction(
   if (user.role === "CUSTOMER") {
     if (ticket.status === "RESOLVED") ticket.status = "OPEN";
     ticket.adminUnread = true;
+    ticket.customerUnread = false;
   } else {
     if (ticket.status === "OPEN") ticket.status = "IN_PROGRESS";
     ticket.adminUnread = false;
+    ticket.customerUnread = true;
   }
   await ticket.save();
 
@@ -215,6 +220,8 @@ export async function updateTicketStatusAction(
 
   revalidatePath(`/admin/support/${ticketId}`);
   revalidatePath("/admin/support");
+  revalidatePath(`/portal/support/${ticketId}`);
+  revalidatePath("/portal/support");
   return { success: "Status updated." };
 }
 

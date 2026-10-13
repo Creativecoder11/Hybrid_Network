@@ -5,10 +5,11 @@ import { User } from "@/models/User";
 import { listVessels } from "@/lib/starlink/vessels";
 import { listTenantUserTerminals } from "@/lib/starlink/inventory";
 import { getVesselDataUsage, getVesselDataUsageHistory, listCurrentDataUsage } from "@/lib/starlink/usage";
-import { getVesselServicePlan } from "@/lib/starlink/service-plans";
 import { getVesselLocation, getVesselLocationHistory, listCurrentLocations } from "@/lib/starlink/locations";
+import { getVesselServicePlan } from "@/lib/starlink/service-plans";
 import { listLatestTelemetry } from "@/lib/starlink/telemetry";
 import { describeStarlinkError } from "@/lib/starlink/client";
+import { formatServicePlanName } from "@/lib/utils/format";
 import { deriveConnectivity } from "./status";
 import type {
   SlashVessel,
@@ -463,7 +464,7 @@ function buildRecord(
       deactivationDate: null,
       suspensionDate: null,
       reactivationDate: null,
-      servicePlan: servicePlan?.planName ?? vessel.serviceLineProductReferenceId,
+      servicePlan: formatServicePlanName(servicePlan?.planName || vessel.serviceLineProductReferenceId),
       assignedCustomerId: link.customerId,
       assignedCustomerName: link.customerName,
       assignedAccountId: link.accountId,
@@ -521,7 +522,7 @@ function buildRecord(
       firmwareStatus: "UNKNOWN",
     },
     planBilling: {
-      assignedPlan: servicePlan?.planName ?? vessel.serviceLineProductReferenceId,
+      assignedPlan: formatServicePlanName(servicePlan?.planName || vessel.serviceLineProductReferenceId),
       planAllowanceGB: allowanceGB,
       pooledDataGroup: null,
       monthlyUsageGB: Math.round(monthlyUsageGB * 100) / 100,

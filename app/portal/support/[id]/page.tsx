@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { connectDB } from "@/lib/db/connect";
 import { SupportTicket } from "@/models/SupportTicket";
 import { requireRole } from "@/lib/auth/dal";
+import { markTicketCustomerRead } from "@/lib/support/unread";
 import { TicketThread } from "@/components/support/TicketThread";
 import type { TicketDetail } from "@/lib/types/support";
 
@@ -24,6 +25,10 @@ export default async function PortalTicketDetailPage({ params }: { params: Promi
     .populate("replies.author")
     .lean();
   if (!ticket || ticket.customer.toString() !== user.customerProfileId) notFound();
+
+  if (ticket.customerUnread) {
+    await markTicketCustomerRead(ticket._id.toString(), user.customerProfileId);
+  }
 
   const opener = ticket.openedBy as unknown as { name: string; role: string } | null;
   const openedByAdmin = Boolean(opener && opener.role !== "CUSTOMER");

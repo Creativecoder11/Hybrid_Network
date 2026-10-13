@@ -31,6 +31,7 @@ export default async function PortalSupportPage() {
       status: t.status,
       replyCount: t.replies?.length ?? 0,
       openedByAdmin: Boolean(opener && opener.role !== "CUSTOMER"),
+      customerUnread: Boolean(t.customerUnread),
       assignedToId: "",
       assignedToName: "",
       createdAt: (t.createdAt as Date | undefined)?.toISOString() ?? "",

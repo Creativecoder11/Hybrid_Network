@@ -129,7 +129,7 @@ export function TerminalsPageClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Total Terminals"
           value={String(stats.total)}
@@ -143,13 +143,6 @@ export function TerminalsPageClient({
           icon="/assets/icons/Icon Container2.svg"
           animatedBorder
           tone="green"
-        />
-        <StatCard
-          label="Open Faults"
-          value={String(stats.openFaults)}
-          icon="/assets/icons/Icon Container2.svg"
-          tone="red"
-          animatedBorder
         />
         <StatCard
           label="Suspended"
@@ -184,18 +177,6 @@ export function TerminalsPageClient({
             <option value="CANCELLED">Cancelled</option>
           </Select>
         </div>
-        <div>
-          <Select
-            value={faultStatus}
-            onChange={(e) => updateParams({ faultStatus: e.target.value })}
-            className="sm:w-44"
-          >
-            <option value="ANY">Any fault status</option>
-            <option value="OPEN">Open faults</option>
-            <option value="ACKNOWLEDGED">Acknowledged</option>
-            <option value="CLEARED">Cleared only</option>
-          </Select>
-        </div>
       </div>
 
       {terminals.length === 0 ? (
@@ -215,15 +196,11 @@ export function TerminalsPageClient({
                 <TH>Status</TH>
                 <TH>Connectivity</TH>
                 <TH>Last Seen</TH>
-                <TH>Faults</TH>
                 <TH />
               </TR>
             </THead>
             <TBody>
               {terminals.map((t) => {
-                const openFaults = t.faults.filter(
-                  (f) => f.status === "OPEN",
-                ).length;
                 return (
                   <TR key={t.id}>
                     <TD>
@@ -278,13 +255,6 @@ export function TerminalsPageClient({
                     </TD>
                     <TD className="text-text-secondary">
                       {t.live.lastSeenAt ? formatDateTime(t.live.lastSeenAt) : "Never"}
-                    </TD>
-                    <TD>
-                      {openFaults > 0 ? (
-                        <Badge tone="red">{openFaults} open</Badge>
-                      ) : (
-                        <span className="text-xs text-text-muted">None</span>
-                      )}
                     </TD>
                     <TD>
                       <Link

@@ -215,21 +215,45 @@ export function AdminSupportClient({
                       <Checkbox checked={selected.has(t.id)} onChange={() => toggleOne(t.id)} />
                     </TD>
                     <TD className="font-mono text-xs text-text-secondary">
-                      <Link href={`/admin/support/${t.id}`} className="font-medium text-accent-blue hover:underline">
-                        #{t.ticketNumber}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        {t.adminUnread && <span className="size-2 shrink-0 rounded-full bg-red" aria-hidden />}
+                        <Link
+                          href={`/admin/support/${t.id}`}
+                          className={`text-accent-blue hover:underline ${t.adminUnread ? "font-bold" : "font-medium"}`}
+                        >
+                          #{t.ticketNumber}
+                        </Link>
+                      </div>
                     </TD>
                     <TD className="max-w-xs text-text-primary">
-                      <p>{t.subject}</p>
-                      {t.openedByAdmin && (
-                        <Badge tone="blue" className="mt-1">
-                          By Support
-                        </Badge>
-                      )}
+                      <p
+                        className={`block max-w-xs truncate ${t.adminUnread ? "font-semibold" : ""}`}
+                        title={t.subject}
+                      >
+                        {t.subject}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {t.adminUnread && (
+                          <Badge tone="red">
+                            {t.replyCount > 0 ? "New reply" : "New"}
+                          </Badge>
+                        )}
+                        {t.openedByAdmin && (
+                          <Badge tone="blue">
+                            By Support
+                          </Badge>
+                        )}
+                      </div>
                     </TD>
-                    <TD>
-                      <p className="text-text-primary">{t.customerName}</p>
-                      {t.customerCode && <p className="text-xs text-accent-green">{t.customerCode}</p>}
+                    <TD className="max-w-[200px]">
+                      <p className="block max-w-[200px] truncate text-text-primary" title={t.customerName}>
+                        {t.customerName}
+                      </p>
+                      {t.customerCode && (
+                        <p className="block max-w-[200px] truncate text-xs text-accent-green" title={t.customerCode}>
+                          {t.customerCode}
+                        </p>
+                      )}
                     </TD>
                     <TD>
                       <Badge tone="neutral">{CATEGORY_LABEL[t.category]}</Badge>

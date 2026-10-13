@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, type ReactNode } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Label } from "@/components/ui/Label";
 import { Button } from "@/components/ui/Button";
 import { saveCustomerAccountAction } from "@/lib/actions/accounts";
+import { listSelectableTerminalsAction, type SelectableTerminalOption } from "@/lib/actions/terminals";
 import { formatCurrency } from "@/lib/utils/format";
 import type { ActionState } from "@/lib/actions/customers";
 import type { CustomerAccountRow, PlanOption } from "@/lib/types/admin";
@@ -34,6 +35,51 @@ export function CustomerAccountFormModal({
   onClose: () => void;
 }) {
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(saveCustomerAccountAction, undefined);
+  const [starlinkVesselIds, setStarlinkVesselIds] = useState(account?.starlinkVesselIds.join("\n") ?? "");
+  const [iccids, setIccids] = useState(account?.iccids.join("\n") ?? "");
+  const [name, setName] = useState(account?.name ?? "");
+  const [terminals, setTerminals] = useState<SelectableTerminalOption[]>([]);
+  const [loadingTerminals, setLoadingTerminals] = useState(true);
+  const [selectedTerminalId, setSelectedTerminalId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    listSelectableTerminalsAction().then((list) => {
+      if (cancelled) return;
+      setTerminals(list);
+      setLoadingTerminals(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleSelectTerminal(terminalId: string) {
+    setSelectedTerminalId(terminalId);
+    if (!terminalId) return;
+    const term = terminals.find((t) => t.id === terminalId);
+    if (!term) return;
+    if (term.vesselId) {
+      setStarlinkVesselIds((prev) => {
+        const lines = prev.split("\n").map((s) => s.trim()).filter(Boolean);
+        if (!lines.includes(term.vesselId)) lines.push(term.vesselId);
+        return lines.join("\n");
+      });
+    }
+    if (term.serialNumber || term.iccid) {
+      const kit = term.serialNumber || term.iccid;
+      setIccids((prev) => {
+        const lines = prev.split("\n").map((s) => s.trim()).filter(Boolean);
+        if (!lines.includes(kit)) lines.push(kit);
+        return lines.join("\n");
+      });
+    }
+    if (!name && term.displayName) {
+      setName(term.displayName);
+    }
+  }
+
+  const selectedTerminal = terminals.find((t) => t.id === selectedTerminalId) ?? null;
 
   useEffect(() => {
     if (state?.success) onClose();
@@ -66,7 +112,12 @@ export function CustomerAccountFormModal({
             <Input name="accountNumber" defaultValue={account?.accountNumber} required placeholder="e.g. 10001" className="font-mono" />
           </Field>
           <Field label="Account Name">
-            <Input name="name" defaultValue={account?.name} placeholder="e.g. MV Pacific Star" />
+            <Input
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. MV Pacific Star"
+            />
           </Field>
           <Field label="Status">
             <Select name="status" defaultValue={account?.status ?? "ACTIVE"}>
@@ -91,14 +142,58 @@ export function CustomerAccountFormModal({
         </div>
 
         <div>
-          <p className="mb-2 mt-2 text-xs font-bold uppercase tracking-wider text-accent-green">Starlink / SLASH</p>
+          <p className="mb-2 mt-2 text-xs font-bold uppercase tracking-wider text-accent-green">Starlink / Terminal Linkage</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Field label="Select Terminal to Link (Starlink Kit / Vessel)">
+                <Select
+                  value={selectedTerminalId}
+                  onChange={(e) => handleSelectTerminal(e.target.value)}
+                  disabled={loadingTerminals}
+                >
+                  <option value="">
+                    {loadingTerminals ? "-- Loading terminals from Starlink... --" : "-- Select a Terminal --"}
+                  </option>
+                  {terminals.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.displayName} — Kit: {t.serialNumber}
+                      {t.serviceLineNumber ? ` (${t.serviceLineNumber})` : ""} · {t.onlineStatus}
+                      {t.assignedCustomerName ? ` [Assigned: ${t.assignedCustomerName}]` : " [Available]"}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+
+            {selectedTerminal && (
+              <div className="sm:col-span-2 rounded-xl border border-accent-green/30 bg-accent-green/10 p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between font-semibold text-accent-green">
+                  <span>Selected Terminal: {selectedTerminal.displayName}</span>
+                  <span className="font-mono text-[11px] uppercase">{selectedTerminal.onlineStatus}</span>
+                </div>
+                <p className="text-text-secondary">
+                  Kit Serial: <strong className="font-mono text-text-primary">{selectedTerminal.serialNumber}</strong>
+                  {selectedTerminal.hardwareId ? <> · Dish: <span className="font-mono text-text-primary">{selectedTerminal.hardwareId}</span></> : null}
+                  {selectedTerminal.serviceLineNumber ? <> · Line: <span className="font-mono text-text-primary">{selectedTerminal.serviceLineNumber}</span></> : null}
+                </p>
+                <p className="text-text-muted truncate">
+                  Vessel UUID: <span className="font-mono text-accent-blue">{selectedTerminal.vesselId}</span>
+                </p>
+              </div>
+            )}
+
             <div className="sm:col-span-2">
               <Field
                 label="Starlink Vessel ID(s)"
-                hint="From Starlink/SLASH (e.g. 019ff593-6557-785c-ac33-36d11b7f301c for TEST UNIT). Devices, live status, usage and location for this account come from these vessels. One per line or comma separated."
+                hint="From Starlink/SLASH (e.g. 019ff593-6557-785c-ac33-36d11b7f301c). Auto-appended when selecting a terminal above, or enter manually."
               >
-                <Textarea name="starlinkVesselIds" rows={2} defaultValue={account?.starlinkVesselIds.join("\n")} className="font-mono text-xs" />
+                <Textarea
+                  name="starlinkVesselIds"
+                  rows={2}
+                  value={starlinkVesselIds}
+                  onChange={(e) => setStarlinkVesselIds(e.target.value)}
+                  className="font-mono text-xs"
+                />
               </Field>
             </div>
             <Field label="Starlink Account Number" hint="e.g. ACC-1234567-12345-12 — needed for SLASH service-line WRITE actions.">
@@ -110,8 +205,14 @@ export function CustomerAccountFormModal({
         <div>
           <p className="mb-2 mt-2 text-xs font-bold uppercase tracking-wider text-accent-green">CDR matching</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="ICCID / Kit IDs" hint="Only used for CDR rows that have no Customer Code.">
-              <Textarea name="iccids" rows={2} defaultValue={account?.iccids.join("\n")} className="font-mono text-xs" />
+            <Field label="ICCID / Kit IDs" hint="Only used for CDR rows that have no Customer Code. Auto-appended when choosing a terminal.">
+              <Textarea
+                name="iccids"
+                rows={2}
+                value={iccids}
+                onChange={(e) => setIccids(e.target.value)}
+                className="font-mono text-xs"
+              />
             </Field>
             <Field label="Card Name" hint="Only used for CDR rows that have no Customer Code.">
               <Input name="cardName" defaultValue={account?.cardName} />

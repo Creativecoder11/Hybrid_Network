@@ -6,6 +6,7 @@ import { getVessel } from "@/lib/starlink/vessels";
 import { getVesselServicePlan } from "@/lib/starlink/service-plans";
 import { getVesselDataUsage, getVesselDataUsageHistory } from "@/lib/starlink/usage";
 import { describeStarlinkError, friendlyStarlinkErrorMessage } from "@/lib/starlink/client";
+import { formatServicePlanName } from "@/lib/utils/format";
 import type { PortalAccount } from "@/lib/accounts/access";
 import type {
   PortalDailyUsageRow,
@@ -141,7 +142,9 @@ export async function getServiceLinePlans(account: PortalAccount): Promise<Porta
         serviceLineNumber: v?.serviceLineNumber ?? "",
         displayName: v?.serviceLineNickname || v?.vesselName || "Starlink service line",
         serviceLineActive: v ? v.serviceLineActive : null,
-        planName: p?.planName ?? null,
+        planName: (p?.planName || v?.serviceLineProductReferenceId)
+          ? formatServicePlanName(p?.planName || v?.serviceLineProductReferenceId)
+          : null,
         allocatedDataGB: nullableNumber(p?.allocatedDataGB),
         priorityDataGB: nullableNumber(p?.priorityDataGB),
         standardDataGB: nullableNumber(p?.standardDataGB),

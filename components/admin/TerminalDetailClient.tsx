@@ -37,13 +37,6 @@ const STATUS_TONE: Record<TerminalStatus, "green" | "amber" | "red" | "neutral" 
   CANCELLED: "red",
 };
 
-const FAULT_SEVERITY_TONE: Record<string, "red" | "amber" | "blue" | "neutral"> = {
-  CRITICAL: "red",
-  MAJOR: "red",
-  MINOR: "amber",
-  WARNING: "amber",
-};
-
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div className="flex items-center justify-between border-b border-line-soft py-2.5 last:border-0">
@@ -100,8 +93,6 @@ export function TerminalDetailClient({
     }
   }
 
-  const openFaults = terminal.faults.filter((f) => f.status === "OPEN");
-
   return (
     <div className="space-y-6">
       <Link
@@ -121,7 +112,6 @@ export function TerminalDetailClient({
             <Badge tone={STATUS_TONE[terminal.status]}>{terminal.status.replace(/_/g, " ")}</Badge>
             <TerminalStatusDot status={terminal.live.onlineStatus} />
             {terminal.dataSource === "DEMO" && <Badge tone="amber">Demo data</Badge>}
-            {openFaults.length > 0 && <Badge tone="red">{openFaults.length} open fault{openFaults.length === 1 ? "" : "s"}</Badge>}
           </div>
           <p className="mt-1 text-sm text-text-muted">
             {terminal.product.manufacturer} {terminal.product.model} · Kit {terminal.identification.serialNumber} ·{" "}
@@ -347,105 +337,6 @@ export function TerminalDetailClient({
                     />
                   </CardContent>
                 </Card>
-              </div>
-            ),
-          },
-          {
-            key: "health",
-            label: "Health",
-            content: (
-              <Card>
-                <CardContent className="pt-5">
-                  <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent-green">Terminal Health</p>
-                  {terminal.dataSource === "SLASH" && (
-                    <p className="mb-3 text-xs text-text-muted">
-                      Hardware health (power, temperature, voltage, alignment, modem) is not exposed by the SLASH API for
-                      Starlink terminals.
-                    </p>
-                  )}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <MetricTile label="Power Status" value={terminal.health.powerStatus} />
-                    <MetricTile
-                      label="Temperature"
-                      value={terminal.health.temperatureCelsius === null ? NOT_AVAILABLE : `${terminal.health.temperatureCelsius}°C`}
-                    />
-                    <MetricTile label="Voltage" value={terminal.health.voltage === null ? NOT_AVAILABLE : `${terminal.health.voltage} V`} />
-                    <MetricTile label="Antenna Alignment" value={terminal.health.antennaAlignment} />
-                    <MetricTile label="Modem Status" value={terminal.health.modemStatus} />
-                    <MetricTile label="SIM Status" value={terminal.health.simStatus.replace(/_/g, " ")} />
-                    <MetricTile label="Firmware Status" value={terminal.health.firmwareStatus.replace(/_/g, " ")} />
-                  </div>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            key: "faults",
-            label: "Faults & Alarms",
-            content: (
-              <div className="space-y-4">
-                <div>
-                  <p className="mb-3 text-sm font-semibold text-text-primary">Faults</p>
-                  {terminal.faults.length === 0 ? (
-                    <EmptyState title="No faults reported" />
-                  ) : (
-                    <TableContainer>
-                      <Table>
-                        <THead>
-                          <TR>
-                            <TH>Code</TH>
-                            <TH>Description</TH>
-                            <TH>Severity</TH>
-                            <TH>Started</TH>
-                            <TH>Cleared</TH>
-                            <TH>Status</TH>
-                          </TR>
-                        </THead>
-                        <TBody>
-                          {terminal.faults.map((f) => (
-                            <TR key={f.id}>
-                              <TD className="font-mono text-xs">{f.code}</TD>
-                              <TD>{f.description}</TD>
-                              <TD>
-                                <Badge tone={FAULT_SEVERITY_TONE[f.severity] ?? "neutral"}>{f.severity}</Badge>
-                              </TD>
-                              <TD>{formatDateTime(f.startTime)}</TD>
-                              <TD>{f.clearTime ? formatDateTime(f.clearTime) : "--"}</TD>
-                              <TD>
-                                <Badge tone={f.status === "OPEN" ? "red" : f.status === "ACKNOWLEDGED" ? "amber" : "green"}>
-                                  {f.status}
-                                </Badge>
-                              </TD>
-                            </TR>
-                          ))}
-                        </TBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </div>
-
-                <div>
-                  <p className="mb-3 text-sm font-semibold text-text-primary">Alarms</p>
-                  {terminal.alarms.length === 0 ? (
-                    <EmptyState title="No active alarms" />
-                  ) : (
-                    <div className="space-y-2">
-                      {terminal.alarms.map((a) => (
-                        <div key={a.id} className="flex items-center justify-between rounded-xl border border-line bg-surface p-3.5">
-                          <div>
-                            <p className="text-sm text-text-primary">{a.message}</p>
-                            <p className="text-xs text-text-muted">
-                              {a.type.replace(/_/g, " ")} · {formatDateTime(a.triggeredAt)}
-                            </p>
-                          </div>
-                          <Badge tone={a.acknowledged ? "neutral" : "red"}>
-                            {a.acknowledged ? "Acknowledged" : "Unacknowledged"}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
             ),
           },

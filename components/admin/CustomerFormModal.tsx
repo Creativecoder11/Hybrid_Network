@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { createCustomerAction, updateCustomerAction, type ActionState } from "@/lib/actions/customers";
+import { listSelectableTerminalsAction, type SelectableTerminalOption } from "@/lib/actions/terminals";
 import { formatCurrency } from "@/lib/utils/format";
 import type { CustomerRow, PlanOption } from "@/lib/types/admin";
 
@@ -56,8 +57,50 @@ export function CustomerFormModal({
   const [planId, setPlanId] = useState(customer?.planId ?? "");
   const [trackingEnabled, setTrackingEnabled] = useState(customer?.trackingEnabled !== false);
   const [starlinkVesselId, setStarlinkVesselId] = useState(customer?.starlinkVesselId ?? "");
+  const [iccid, setIccid] = useState(customer?.iccid ?? "");
+  const [imei, setImei] = useState(customer?.imei ?? "");
+  const [vendor, setVendor] = useState(customer?.vendor ?? "");
+  const [terminals, setTerminals] = useState<SelectableTerminalOption[]>([]);
+  const [loadingTerminals, setLoadingTerminals] = useState(true);
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>("");
 
   const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSelectableTerminalsAction().then((list) => {
+      if (cancelled) return;
+      setTerminals(list);
+      setLoadingTerminals(false);
+      if (customer?.iccid) {
+        const byKit = list.find((t) => t.serialNumber === customer.iccid || t.iccid === customer.iccid);
+        if (byKit) {
+          setSelectedTerminalId(byKit.id);
+          return;
+        }
+      }
+      if (customer?.starlinkVesselId) {
+        const byVessel = list.find((t) => t.vesselId === customer.starlinkVesselId);
+        if (byVessel) setSelectedTerminalId(byVessel.id);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customer]);
+
+  function handleSelectTerminal(terminalId: string) {
+    setSelectedTerminalId(terminalId);
+    if (!terminalId) return;
+    const term = terminals.find((t) => t.id === terminalId);
+    if (!term) return;
+    if (term.vesselId) setStarlinkVesselId(term.vesselId);
+    if (term.serialNumber || term.iccid) setIccid(term.serialNumber || term.iccid);
+    if (term.hardwareId || term.imei) setImei(term.hardwareId || term.imei);
+    if (term.vendor) setVendor(term.vendor);
+  }
+
+  const selectedTerminal = terminals.find((t) => t.id === selectedTerminalId) ?? null;
 
   useEffect(() => {
     if (state?.success && mode === "edit") {
@@ -247,16 +290,30 @@ export function CustomerFormModal({
             <Input name="cardName" defaultValue={customer?.cardName} placeholder="e.g. NI-APAC_SUPPORT" />
           </Field>
           <Field label="ICCID">
-            <Input name="iccid" defaultValue={customer?.iccid} placeholder="e.g. KITP00279271" />
+            <Input
+              name="iccid"
+              value={iccid}
+              onChange={(e) => setIccid(e.target.value)}
+              placeholder="e.g. KITP00279271"
+            />
           </Field>
           <Field label="IMEI">
-            <Input name="imei" defaultValue={customer?.imei} />
+            <Input
+              name="imei"
+              value={imei}
+              onChange={(e) => setImei(e.target.value)}
+            />
           </Field>
           <Field label="Service">
             <Input name="service" defaultValue={customer?.service} placeholder="e.g. Background IP" />
           </Field>
           <Field label="Vendor">
-            <Input name="vendor" defaultValue={customer?.vendor} placeholder="e.g. Starlink" />
+            <Input
+              name="vendor"
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              placeholder="e.g. Starlink"
+            />
           </Field>
           <div className="sm:col-span-2">
             <Field label="Company">
@@ -270,12 +327,60 @@ export function CustomerFormModal({
           </div>
         </div>
 
-        <SectionLabel>Customer Accounts</SectionLabel>
+        <SectionLabel>Customer Accounts &amp; Terminal</SectionLabel>
         <p className="-mt-2 mb-3 text-xs text-text-muted">
-          The Customer Account number is the Customer Code that appears on CDR files. Enter one or more (comma
-          separated). More accounts can be added later from the customer&apos;s Accounts tab.
+          The Customer Account number is the Customer Code that appears on CDR files. Select a terminal below to
+          automatically populate the Starlink Vessel ID and Kit details.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Field label="Select Terminal (Starlink Kit / Vessel)">
+              <Select
+                value={selectedTerminalId}
+                onChange={(e) => handleSelectTerminal(e.target.value)}
+                disabled={loadingTerminals}
+              >
+                <option value="">
+                  {loadingTerminals ? "-- Loading terminals from Starlink... --" : "-- Select a Terminal --"}
+                </option>
+                {terminals.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.displayName} — Kit: {t.serialNumber}
+                    {t.serviceLineNumber ? ` (${t.serviceLineNumber})` : ""} · {t.onlineStatus}
+                    {t.assignedCustomerName ? ` [Assigned: ${t.assignedCustomerName}]` : " [Available]"}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+
+          {selectedTerminal && (
+            <div className="sm:col-span-2 rounded-xl border border-accent-green/30 bg-accent-green/10 p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between font-semibold text-accent-green">
+                <span>Selected Terminal: {selectedTerminal.displayName}</span>
+                <span className="font-mono text-[11px] uppercase">{selectedTerminal.onlineStatus}</span>
+              </div>
+              <p className="text-text-secondary">
+                Kit Serial: <strong className="font-mono text-text-primary">{selectedTerminal.serialNumber}</strong>
+                {selectedTerminal.hardwareId ? (
+                  <>
+                    {" "}
+                    · Dish: <span className="font-mono text-text-primary">{selectedTerminal.hardwareId}</span>
+                  </>
+                ) : null}
+                {selectedTerminal.serviceLineNumber ? (
+                  <>
+                    {" "}
+                    · Line: <span className="font-mono text-text-primary">{selectedTerminal.serviceLineNumber}</span>
+                  </>
+                ) : null}
+              </p>
+              <p className="text-text-muted truncate">
+                Vessel UUID: <span className="font-mono text-accent-blue">{selectedTerminal.vesselId}</span>
+              </p>
+            </div>
+          )}
+
           <div className="sm:col-span-2">
             <Field label="Customer Account Number(s)" required>
               <Input
@@ -300,15 +405,7 @@ export function CustomerFormModal({
               required
             />
             <p className="mt-1 text-[11px] text-text-muted">
-              Live vessel UUID from Starlink (e.g.{" "}
-              <button
-                type="button"
-                className="font-mono text-accent-green underline hover:text-accent-green/80 cursor-pointer"
-                onClick={() => setStarlinkVesselId("019ff593-6557-785c-ac33-36d11b7f301c")}
-              >
-                019ff593-6557-785c-ac33-36d11b7f301c
-              </button>{" "}
-              for TEST UNIT)
+              Auto-filled when you select a terminal above, or paste a vessel UUID manually.
             </p>
           </Field>
           <Field label="Service Plan (first account)" required>
