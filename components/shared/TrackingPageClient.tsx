@@ -16,7 +16,15 @@ import { formatDateTime } from "@/lib/utils/format";
 import { useRouter } from "next/navigation";
 import type { TerminalRecord } from "@/lib/terminals/types";
 
-export function TrackingPageClient({ terminals, detailBasePath }: { terminals: TerminalRecord[]; detailBasePath: string }) {
+export function TrackingPageClient({
+  terminals,
+  detailBasePath,
+  showHistory = true,
+}: {
+  terminals: TerminalRecord[];
+  detailBasePath: string;
+  showHistory?: boolean;
+}) {
   const router = useRouter();
   const located = terminals.filter((t) => t.location);
   const [selectedId, setSelectedId] = useState<string | null>(located[0]?.id ?? null);
@@ -29,6 +37,7 @@ export function TrackingPageClient({ terminals, detailBasePath }: { terminals: T
   const selected = located.find((t) => t.id === selectedId) ?? null;
 
   function loadHistory(terminalId: string, start?: string, end?: string) {
+    if (!showHistory) return;
     startTransition(async () => {
       const result = await getTerminalLocationHistoryAction(terminalId, start || undefined, end || undefined);
       if ("points" in result) {
@@ -40,16 +49,18 @@ export function TrackingPageClient({ terminals, detailBasePath }: { terminals: T
   }
 
   useEffect(() => {
-    if (selectedId) loadHistory(selectedId);
+    if (showHistory && selectedId) loadHistory(selectedId);
     // Only on mount — selecting a different terminal calls loadHistory directly via selectTerminal().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function selectTerminal(id: string) {
     setSelectedId(id);
-    setHistory([]);
-    setRange({ start: "", end: "" });
-    loadHistory(id);
+    if (showHistory) {
+      setHistory([]);
+      setRange({ start: "", end: "" });
+      loadHistory(id);
+    }
   }
 
   if (located.length === 0) {
@@ -82,9 +93,10 @@ export function TrackingPageClient({ terminals, detailBasePath }: { terminals: T
                 latitude: t.location!.latitude,
                 longitude: t.location!.longitude,
                 label: t.activation.displayName || t.identification.serialNumber,
+                serialNumber: t.identification.serialNumber,
                 online: t.live.onlineStatus === "ONLINE",
               }))}
-              trail={history}
+              trail={showHistory ? history : []}
               selectedId={selectedId ?? undefined}
               onSelectPoint={selectTerminal}
               height={420}
@@ -116,7 +128,7 @@ export function TrackingPageClient({ terminals, detailBasePath }: { terminals: T
         </Card>
       </div>
 
-      {selected && (
+      {showHistory && selected && (
         <Card>
           <CardContent className="pt-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

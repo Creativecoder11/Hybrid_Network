@@ -44,7 +44,7 @@ export default async function PortalOverviewPage({
       ],
     })
       .sort({ createdAt: -1 })
-      .limit(6)
+      .limit(30)
       .lean(),
     listTerminals({ accountIds: [account.id] }),
     getServiceLinePlans(account),

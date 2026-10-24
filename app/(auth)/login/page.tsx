@@ -8,7 +8,7 @@ export function generateMetadata(): Metadata {
     return { title: "Admin Portal Sign In | Hybrid Networks" };
   }
   if (portalMode === "customer") {
-    return { title: "Customer Portal Sign In | Hybrid Networks" };
+    return { title: "Athena Customer Portal Sign In | Hybrid Networks" };
   }
   return { title: "Sign In | Hybrid Networks" };
 }

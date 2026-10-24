@@ -42,6 +42,7 @@ declare global {
         setContent(content: string | Element): void;
         open(map: Map, anchor?: Marker): void;
         close(): void;
+        addListener(event: string, handler: () => void): void;
       }
       class Marker {
         constructor(opts?: Record<string, unknown>);
@@ -69,6 +70,7 @@ export type MapPoint = {
   latitude: number;
   longitude: number;
   label: string;
+  serialNumber?: string;
   online?: boolean;
 };
 
@@ -255,11 +257,36 @@ export function LocationMap({
       backgroundColor: "#141A22",
     });
 
-    infoWindowRef.current = new google.maps.InfoWindow({
+    const infoWindow = new google.maps.InfoWindow({
       pixelOffset: new google.maps.Point(0, -16),
     });
+    infoWindow.addListener("domready", () => {
+      const closeBtn = document.getElementById("custom-map-infowindow-close");
+      if (closeBtn) {
+        closeBtn.onclick = (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          infoWindowRef.current?.close();
+        };
+      }
+    });
+    infoWindowRef.current = infoWindow;
     mapInstanceRef.current = map;
   }, [mapLoaded, mapType, points, trail]);
+
+  // Hook custom close handler on window
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).__closeMapInfoWindow = () => {
+        infoWindowRef.current?.close();
+      };
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).__closeMapInfoWindow;
+      }
+    };
+  }, []);
 
   // Update map style when mapType changes
   useEffect(() => {
@@ -282,21 +309,76 @@ export function LocationMap({
       const statusBorder = isOnline ? "rgba(0, 207, 144, 0.35)" : "rgba(156, 163, 175, 0.35)";
       const statusText = isOnline ? "ONLINE" : "OFFLINE";
 
+      const hasDistinctSerial = Boolean(point.serialNumber && point.serialNumber !== point.label);
+      const serialHtml = hasDistinctSerial
+        ? `<div style="font-size: 9.5px; color: #9CA3AF; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.2px; margin-top: 1px;">${point.serialNumber}</div>`
+        : "";
+
       const content = `
-        <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #F9FAFB; padding: 2px 4px; min-width: 190px; user-select: none;">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
-            <span style="font-weight: 700; font-size: 14px; color: #00CF90; letter-spacing: 0.3px;">${point.label}</span>
-            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; background: ${statusBg}; color: ${statusColor}; padding: 2px 7px; border-radius: 9999px; border: 1px solid ${statusBorder};">
-              <span style="display:inline-block; width: 5px; height: 5px; border-radius: 50%; background: ${statusColor};"></span>
+        <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #F9FAFB; min-width: 200px; max-width: fit-content; padding: 0; user-select: none; position: relative;">
+          <!-- Custom Compact Close Button -->
+          <button
+            id="custom-map-infowindow-close"
+            type="button"
+            onclick="window.__closeMapInfoWindow && window.__closeMapInfoWindow()"
+            style="
+              position: absolute;
+              top: -1px;
+              right: -1px;
+              width: 18px;
+              height: 18px;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              border-radius: 4px;
+              background: rgba(255, 255, 255, 0.08);
+              border: 1px solid rgba(255, 255, 255, 0.14);
+              color: #9CA3AF;
+              cursor: pointer;
+              padding: 0;
+              margin: 0;
+              line-height: 1;
+              box-sizing: border-box;
+              transition: all 0.15s ease;
+            "
+            onmouseover="this.style.background='rgba(255,255,255,0.2)'; this.style.color='#FFFFFF';"
+            onmouseout="this.style.background='rgba(255,255,255,0.08)'; this.style.color='#9CA3AF';"
+            aria-label="Close"
+            title="Close"
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+
+          <!-- Header (Title & Status) -->
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding-right: 22px;">
+            <div style="min-width: 0;">
+              <div style="font-weight: 700; font-size: 13px; color: #00CF90; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">
+                ${point.label}
+              </div>
+              ${serialHtml}
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 3.5px; font-size: 9px; font-weight: 700; text-transform: uppercase; background: ${statusBg}; color: ${statusColor}; padding: 1.5px 6px; border-radius: 9999px; border: 1px solid ${statusBorder}; white-space: nowrap; flex-shrink: 0;">
+              <span style="display:inline-block; width: 4.5px; height: 4.5px; border-radius: 50%; background: ${statusColor};"></span>
               ${statusText}
             </span>
           </div>
-          <div style="font-size: 11px; color: #9CA3AF; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: rgba(255,255,255,0.06); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px;">
-            ${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}
+
+          <!-- Coordinates -->
+          <div style="font-size: 10.5px; color: #9CA3AF; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: rgba(255,255,255,0.04); padding: 4px 7px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 6px; display: flex; align-items: center; gap: 5px;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00CF90" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+            <span>${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}</span>
           </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: #60A5FA; font-weight: 500;">
-            <span>Click to select</span>
-            <span style="color: #6B7280; font-size: 10px;">GPS Fix</span>
+
+          <!-- Footer -->
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: #60A5FA; font-weight: 500;">
+            <span style="opacity: 0.9;">Click to select</span>
+            <span style="color: #6B7280; font-size: 9px; display: inline-flex; align-items: center; gap: 3px;">
+              <span style="width: 4px; height: 4px; border-radius: 50%; background: #00CF90; display: inline-block;"></span>
+              GPS Fix
+            </span>
           </div>
         </div>
       `;
@@ -426,33 +508,43 @@ export function LocationMap({
     <div className="relative overflow-hidden rounded-xl border border-line bg-surface-raised">
       {/* Dark Theme Google Maps InfoWindow Overrides */}
       <style>{`
+        .gm-style .gm-style-iw,
         .gm-style .gm-style-iw-c {
-          background-color: #111827 !important;
-          border: 1px solid #374151 !important;
-          border-radius: 12px !important;
-          padding: 10px 14px !important;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7) !important;
+          max-width: fit-content !important;
+        }
+        .gm-style .gm-style-iw-c {
+          position: relative !important;
+          background-color: #0b0f14 !important;
+          border: 1px solid #232a33 !important;
+          border-radius: 10px !important;
+          padding: 8px 10px !important;
+          box-shadow: 0 16px 28px -4px rgba(0, 0, 0, 0.8), 0 4px 10px rgba(0, 0, 0, 0.6) !important;
+          max-width: fit-content !important;
         }
         .gm-style .gm-style-iw-tc::after {
-          background-color: #111827 !important;
-          box-shadow: -2px 2px 2px rgba(0, 0, 0, 0.4) !important;
+          background-color: #0b0f14 !important;
+          box-shadow: -1px 1px 2px rgba(0, 0, 0, 0.5) !important;
         }
         .gm-style .gm-style-iw-d {
           overflow: hidden !important;
           padding: 0 !important;
+          max-width: fit-content !important;
           max-height: none !important;
         }
-        .gm-style .gm-ui-hover-effect {
-          top: 6px !important;
-          right: 6px !important;
-          filter: invert(1) brightness(2) !important;
-          opacity: 0.65 !important;
-          border-radius: 50% !important;
-          transition: opacity 0.15s ease !important;
-        }
-        .gm-style .gm-ui-hover-effect:hover {
-          opacity: 1 !important;
-          background: rgba(255, 255, 255, 0.1) !important;
+        /* Completely eliminate Google's native header and oversized close button */
+        .gm-style .gm-ui-hover-effect,
+        .gm-ui-hover-effect,
+        .gm-style-iw-c > header,
+        .gm-style-iw-c header,
+        gmp-internal-dialog header {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          height: 0 !important;
+          width: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
       `}</style>
 

@@ -257,7 +257,16 @@ export function TerminalDetailClient({
                           <MetricTile label="Accuracy" value={`±${terminal.location.accuracyMeters} m`} />
                         </div>
                         <LocationMap
-                          points={[{ id: terminal.id, latitude: terminal.location.latitude, longitude: terminal.location.longitude, label: terminal.identification.serialNumber }]}
+                          points={[
+                            {
+                              id: terminal.id,
+                              latitude: terminal.location.latitude,
+                              longitude: terminal.location.longitude,
+                              label: terminal.identification.serialNumber,
+                              serialNumber: terminal.identification.serialNumber,
+                              online: terminal.live.onlineStatus === "ONLINE",
+                            },
+                          ]}
                           trail={terminal.locationHistory}
                         />
                       </>

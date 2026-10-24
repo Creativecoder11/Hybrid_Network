@@ -35,7 +35,7 @@ export default async function PortalTrackingPage() {
   return (
     <div className="space-y-4">
       {unavailable && <RetryNotice message="Unable to load some device locations from Starlink right now. Please try again." />}
-      <TrackingPageClient terminals={terminals} detailBasePath="/portal/devices" />
+      <TrackingPageClient terminals={terminals} detailBasePath="/portal/devices" showHistory={false} />
     </div>
   );
 }

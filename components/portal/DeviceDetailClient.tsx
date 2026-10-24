@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, MapPin, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -56,12 +56,16 @@ export function DeviceDetailClient({
   terminal,
   alerts,
   locationEnabled,
+  initialTab,
 }: {
   terminal: TerminalRecord;
   alerts: EnrichedAlert[];
   locationEnabled: boolean;
+  initialTab?: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabFromQuery = searchParams.get("tab") || initialTab || undefined;
   usePolling(() => router.refresh(), LIVE_DEVICE_POLL_INTERVAL_MS, !!terminal.sourceVesselId);
   const online = terminal.live.onlineStatus === "ONLINE";
   const live = (v: string) => (online ? v : "--");
@@ -87,6 +91,7 @@ export function DeviceDetailClient({
       </div>
 
       <Tabs
+        defaultTab={tabFromQuery}
         tabs={[
           {
             key: "status",
@@ -156,7 +161,16 @@ export function DeviceDetailClient({
             ) : terminal.location ? (
               <div className="space-y-4">
                 <LocationMap
-                  points={[{ id: terminal.id, latitude: terminal.location.latitude, longitude: terminal.location.longitude, label: name }]}
+                  points={[
+                    {
+                      id: terminal.id,
+                      latitude: terminal.location.latitude,
+                      longitude: terminal.location.longitude,
+                      label: name,
+                      serialNumber: terminal.identification.serialNumber,
+                      online: terminal.live.onlineStatus === "ONLINE",
+                    },
+                  ]}
                   trail={terminal.locationHistory}
                 />
                 <p className="text-xs text-text-muted">

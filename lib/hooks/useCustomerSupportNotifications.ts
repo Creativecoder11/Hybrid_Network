@@ -5,25 +5,31 @@ import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { toast } from "sonner";
 import type { CustomerSupportNotifications } from "@/lib/support/unread";
+import type { EnrichedAlert } from "@/lib/terminals/alerts";
 
 const POLL_INTERVAL_MS = 20_000;
 
-async function fetchNotifications(url: string): Promise<CustomerSupportNotifications> {
+export type PortalNotificationsPayload = {
+  support: CustomerSupportNotifications;
+  alerts: EnrichedAlert[];
+};
+
+async function fetchNotifications(url: string): Promise<PortalNotificationsPayload> {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`notifications ${res.status}`);
-  const body = (await res.json()) as { support: CustomerSupportNotifications };
-  return body.support;
+  const body = (await res.json()) as { support: CustomerSupportNotifications; alerts?: EnrichedAlert[] };
+  return {
+    support: body.support,
+    alerts: body.alerts ?? [],
+  };
 }
 
 /**
- * Live unread-support state for the customer portal shell. The portal layout
- * doesn't re-render on client navigation, so without polling the Support badge
- * would only change on a full page reload. Pops a toast when an admin replies
- * or creates a ticket for the customer while they are on the site.
+ * Live notification state (Support & Device Alerts) for the customer portal shell.
  */
-export function useCustomerSupportNotifications(
-  initial: CustomerSupportNotifications
-): CustomerSupportNotifications {
+export function usePortalNotifications(
+  initial: PortalNotificationsPayload
+): PortalNotificationsPayload {
   const pathname = usePathname();
   const router = useRouter();
   const { data, mutate } = useSWR("/api/portal/notifications", fetchNotifications, {
@@ -39,24 +45,21 @@ export function useCustomerSupportNotifications(
     void mutate();
   }, [pathname, mutate]);
 
-  // Each ticket is announced once per unread spell: seen ids are remembered
-  // until the ticket drops out of the unread list.
-  const announced = useRef<Map<string, string> | null>(null);
+  // Support notifications announcement
+  const announcedSupport = useRef<Map<string, string> | null>(null);
   useEffect(() => {
-    const tickets = data?.tickets ?? [];
-    if (announced.current === null) {
-      // First render: what was already unread at page load isn't "new".
-      announced.current = new Map(tickets.map((t) => [t.id, t.updatedAt]));
+    const tickets = data?.support.tickets ?? [];
+    if (announcedSupport.current === null) {
+      announcedSupport.current = new Map(tickets.map((t) => [t.id, t.updatedAt]));
       return;
     }
-    const seen = announced.current;
+    const seen = announcedSupport.current;
     let changed = false;
     for (const t of tickets) {
       if (seen.get(t.id) === t.updatedAt) continue;
       seen.set(t.id, t.updatedAt);
       changed = true;
       if (pathname === `/portal/support/${t.id}`) {
-        // Already looking at it: reload to show the reply (which also marks it read).
         router.refresh();
         continue;
       }
@@ -66,12 +69,46 @@ export function useCustomerSupportNotifications(
         duration: 10_000,
       });
     }
-    // Keep the open Support list in step without a manual reload.
     if (changed && pathname === "/portal/support") router.refresh();
     const current = new Set(tickets.map((t) => t.id));
     for (const id of seen.keys()) if (!current.has(id)) seen.delete(id);
-  }, [data, pathname, router]);
+  }, [data?.support, pathname, router]);
+
+  // Device alerts announcement
+  const announcedAlerts = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const alerts = data?.alerts ?? [];
+    const activeAlerts = alerts.filter((a) => a.active);
+    if (announcedAlerts.current === null) {
+      announcedAlerts.current = new Set(activeAlerts.map((a) => a.id));
+      return;
+    }
+    const seen = announcedAlerts.current;
+    for (const a of activeAlerts) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      toast.warning(`Alert: ${a.alertName}`, {
+        description: `${a.terminalLabel || "Device"}: ${a.description || "Active device alert reported"}`,
+        action: a.deviceId
+          ? {
+              label: "View Device",
+              onClick: () => router.push(`/portal/devices/${encodeURIComponent(a.deviceId!)}?tab=alerts`),
+            }
+          : undefined,
+        duration: 10_000,
+      });
+    }
+    const current = new Set(activeAlerts.map((a) => a.id));
+    for (const id of seen) if (!current.has(id)) seen.delete(id);
+  }, [data?.alerts, router]);
 
   return data ?? initial;
+}
+
+export function useCustomerSupportNotifications(
+  initial: CustomerSupportNotifications
+): CustomerSupportNotifications {
+  const notifications = usePortalNotifications({ support: initial, alerts: [] });
+  return notifications.support;
 }
 

@@ -15,19 +15,6 @@ export type NavItem = {
   activeMatch?: (pathname: string) => boolean;
 };
 
-function LogoMark() {
-  return (
-    <Image
-      src="/Hybrid - Logo.svg"
-      alt="Logo"
-      width={173}
-      height={60}
-      loading="eager"
-      className=""
-    />
-  );
-}
-
 export function AppShell({
   navItems,
   brandLabel,
@@ -35,6 +22,9 @@ export function AppShell({
   onExit,
   exitLabel = "Exit Portal",
   topbar,
+  logoSrc = "/Hybrid - Logo.svg",
+  logoClassName,
+  logoSlot,
   children,
 }: {
   navItems: NavItem[];
@@ -43,10 +33,27 @@ export function AppShell({
   onExit: () => void;
   exitLabel?: string;
   topbar?: ReactNode;
+  logoSrc?: string;
+  logoClassName?: string;
+  logoSlot?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const renderLogo = () => {
+    if (logoSlot) return logoSlot;
+    return (
+      <Image
+        src={logoSrc}
+        alt={brandLabel || "Logo"}
+        width={173}
+        height={60}
+        loading="eager"
+        className={cn("max-h-12 w-auto object-contain", logoClassName)}
+      />
+    );
+  };
 
   const isActive = (item: NavItem) => {
     if (item.activeMatch) return item.activeMatch(pathname);
@@ -94,8 +101,9 @@ export function AppShell({
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-[#03070C] md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">
-          <LogoMark />
-          {/* <span className="text-sm font-bold tracking-wide text-text-primary">{brandLabel}</span> */}
+          <Link href={brandHref} className="flex items-center">
+            {renderLogo()}
+          </Link>
         </div>
         {navList()}
         <div className="border-t border-line p-3">
@@ -118,12 +126,9 @@ export function AppShell({
           />
           <aside className="relative flex h-full w-64 flex-col border-r border-line bg-surface">
             <div className="flex items-center justify-between px-5 py-5">
-              <div className="flex items-center gap-2.5">
-                <LogoMark />
-                <span className="text-sm font-bold tracking-wide text-text-primary">
-                  {brandLabel}
-                </span>
-              </div>
+              <Link href={brandHref} className="flex items-center gap-2.5">
+                {renderLogo()}
+              </Link>
               <button
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close menu"

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPortalContext, canAccessAccount } from "@/lib/accounts/access";
@@ -10,9 +11,16 @@ export const metadata: Metadata = {
   title: "Device Detail | Hybrid Networks Portal",
 };
 
-export default async function PortalDeviceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PortalDeviceDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const ctx = await getPortalContext();
   const { id } = await params;
+  const { tab } = (await searchParams) || {};
   const terminal = await getTerminal(decodeURIComponent(id), ctx.account?.id);
 
   if (!terminal) notFound();
@@ -49,10 +57,13 @@ export default async function PortalDeviceDetailPage({ params }: { params: Promi
   const terminalAlerts = alerts.filter((a) => a.deviceId === terminal.id);
 
   return (
-    <DeviceDetailClient
-      terminal={applyLocationPolicy(terminal, ctx.features)}
-      alerts={terminalAlerts}
-      locationEnabled={ctx.features.deviceLocation}
-    />
+    <Suspense fallback={null}>
+      <DeviceDetailClient
+        terminal={applyLocationPolicy(terminal, ctx.features)}
+        alerts={terminalAlerts}
+        locationEnabled={ctx.features.deviceLocation}
+        initialTab={tab}
+      />
+    </Suspense>
   );
 }

@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   UserCheck,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 import { loginAction, type AuthFormState } from "@/lib/auth/actions";
 import { Input } from "@/components/ui/Input";
@@ -45,12 +44,27 @@ export function LoginForm({
   const searchParams = useSearchParams();
   const resetSuccess = searchParams.get("reset") === "success";
   const inactiveNotice = searchParams.get("notice") === "inactive";
+  const portalParam = searchParams.get("portal");
 
-  const isAdmin = portalMode === "admin";
-  const isCustomer = portalMode === "customer";
+  const isAdmin = portalMode === "admin" || portalParam === "admin";
+  const isCustomer = portalMode === "customer" || portalParam === "customer";
 
   return (
     <div>
+      {/* Athena Logo for Customer Portal */}
+      {/* {isCustomer && (
+        <div className="mb-5 flex items-center">
+          <Image
+            src="/athena-logo.png"
+            alt="Athena - Hybrid Networks"
+            width={260}
+            height={260}
+            className="h-24 w-auto object-contain"
+            priority
+          />
+        </div>
+      )} */}
+
       {/* Portal Identification Badge */}
       {isAdmin && (
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400">

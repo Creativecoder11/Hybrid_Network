@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db/connect";
 import { User } from "@/models/User";
 import { getPortalContext } from "@/lib/accounts/access";
 import { Card, CardContent } from "@/components/ui/Card";
+import { ProfileAvatarForm } from "@/components/portal/ProfileAvatarForm";
 import { ChangePasswordForm } from "@/components/portal/ChangePasswordForm";
 import { displayOrDash, formatDate } from "@/lib/utils/format";
 
@@ -29,9 +30,22 @@ export default async function PortalProfilePage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <p className="text-xl font-bold text-text-primary">Profile</p>
-        <p className="text-sm text-text-muted">Your account information and security settings.</p>
+        <p className="text-xl font-bold text-text-primary">Profile & Settings</p>
+        <p className="text-sm text-text-muted">Your account information, profile picture, and security settings.</p>
       </div>
+
+      <Card>
+        <CardContent className="pt-5">
+          <p className="mb-4 text-xs font-bold uppercase tracking-wider text-accent-green">Profile Picture</p>
+          <ProfileAvatarForm
+            user={{
+              name: customer.name ?? ctx.user.name,
+              email: customer.email,
+              avatarUrl: customer.avatarUrl,
+            }}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-5">

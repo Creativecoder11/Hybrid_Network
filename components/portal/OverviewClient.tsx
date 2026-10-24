@@ -14,6 +14,8 @@ import {
   Satellite,
   Radio,
   FileText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -137,8 +139,10 @@ export function OverviewClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [payOpen, setPayOpen] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const dueInDays = payment ? daysUntil(payment.dueDate) : null;
   const firstName = (customerName || "").trim().split(/\s+/)[0] || "Customer";
+  const displayedActivity = showAllActivity ? activity : activity.slice(0, 3);
 
   function updatePeriod(value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -363,27 +367,58 @@ export function OverviewClient({
           )}
         </Card>
 
-        <Card className="p-5 lg:col-span-1">
-          <p className="mb-3 text-sm font-semibold text-text-primary">Recent Activity</p>
+        <Card className="flex flex-col p-5 lg:col-span-1">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-text-primary">Recent Activity</p>
+            {activity.length > 4 && (
+              <span className="text-xs text-text-muted">
+                {showAllActivity ? `${activity.length} items` : `4 of ${activity.length}`}
+              </span>
+            )}
+          </div>
           {activity.length === 0 ? (
             <p className="py-6 text-center text-xs text-text-muted">No recent activity.</p>
           ) : (
-            <div className="space-y-1">
-              {activity.map((a) => {
-                const { icon: Icon, tone, text } = activityMeta(a.action, a.meta);
-                return (
-                  <div key={a.id} className="flex items-start gap-3 border-b border-line-soft py-2.5 last:border-0">
-                    <span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${tone}`}>
-                      <Icon className="size-3.5" />
-                    </span>
-                    <div>
-                      <p className="text-sm text-text-primary">{text}</p>
-                      <p className="text-xs text-text-muted">{formatDate(a.createdAt)}</p>
+            <>
+              <div
+                className={`space-y-1 ${
+                  showAllActivity ? "max-h-80 overflow-y-auto pr-1" : ""
+                }`}
+              >
+                {displayedActivity.map((a) => {
+                  const { icon: Icon, tone, text } = activityMeta(a.action, a.meta);
+                  return (
+                    <div key={a.id} className="flex items-start gap-3 border-b border-line-soft py-2.5 last:border-0">
+                      <span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${tone}`}>
+                        <Icon className="size-3.5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-text-primary">{text}</p>
+                        <p className="text-xs text-text-muted">{formatDate(a.createdAt)}</p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+
+              {activity.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllActivity((s) => !s)}
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-surface-raised/40 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
+                >
+                  {showAllActivity ? (
+                    <>
+                      Show less <ChevronUp className="size-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      See more ({activity.length - 4} more) <ChevronDown className="size-3.5" />
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </Card>
       </div>
