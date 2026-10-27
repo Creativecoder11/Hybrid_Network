@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
       "./public/assets/hybrid-logo-invoice.png",
     ],
   },
+  experimental: {
+  cpus: 2,
+},
 };
 
 export default nextConfig;
