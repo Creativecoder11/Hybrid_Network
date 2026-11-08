@@ -7,6 +7,7 @@ import { CustomerAccount } from "@/models/CustomerAccount";
 import { Settings } from "@/models/Settings";
 import { ActivityLog } from "@/models/ActivityLog";
 import { generateInvoiceNumber } from "@/lib/utils/ids";
+import { runThrottled } from "@/lib/utils/throttle";
 import { emailInvoiceToCustomer } from "@/lib/billing/emailInvoice";
 import { roundCurrency } from "@/lib/billing/money";
 import { addDays, issueDateForCycle, periodMonthOf } from "@/lib/billing/recurringSchedule";
@@ -193,11 +194,18 @@ async function generateNextCycle(scheduleId: string, now: Date): Promise<"genera
   return "generated";
 }
 
+// Page loads only need to catch up on a run the hourly timer missed (e.g.
+// while Passenger had the app asleep), so they share one run per minute
+// instead of each scanning schedules before the page can render.
+const PAGE_CATCH_UP_INTERVAL_MS = 60 * 1000;
+
 /** Same as runDueRecurringInvoices but never throws — for page loads and timers. */
 export async function runDueRecurringInvoicesSafely(): Promise<void> {
   try {
-    const { generated } = await runDueRecurringInvoices();
-    if (generated > 0) console.log(`[recurring] generated ${generated} invoice(s)`);
+    await runThrottled("recurring-invoices", PAGE_CATCH_UP_INTERVAL_MS, async () => {
+      const { generated } = await runDueRecurringInvoices();
+      if (generated > 0) console.log(`[recurring] generated ${generated} invoice(s)`);
+    });
   } catch (err) {
     console.error("[recurring] run failed:", err);
   }

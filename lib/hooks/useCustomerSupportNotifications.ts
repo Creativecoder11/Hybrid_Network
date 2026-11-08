@@ -14,6 +14,12 @@ export type PortalNotificationsPayload = {
   alerts: EnrichedAlert[];
 };
 
+/** `alerts: null` = not loaded yet; the hook fetches them right after mount. */
+type NotificationsState = {
+  support: CustomerSupportNotifications;
+  alerts: EnrichedAlert[] | null;
+};
+
 async function fetchNotifications(url: string): Promise<PortalNotificationsPayload> {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`notifications ${res.status}`);
@@ -28,22 +34,27 @@ async function fetchNotifications(url: string): Promise<PortalNotificationsPaylo
  * Live notification state (Support & Device Alerts) for the customer portal shell.
  */
 export function usePortalNotifications(
-  initial: PortalNotificationsPayload
+  initial: NotificationsState
 ): PortalNotificationsPayload {
   const pathname = usePathname();
   const router = useRouter();
-  const { data, mutate } = useSWR("/api/portal/notifications", fetchNotifications, {
+  const { data, mutate } = useSWR<NotificationsState>("/api/portal/notifications", fetchNotifications, {
     fallbackData: initial,
     refreshInterval: POLL_INTERVAL_MS,
     revalidateOnFocus: true,
-    revalidateOnMount: false,
+    // The server render doesn't include device alerts (they're slow to build),
+    // so fetch once on mount when they're missing.
+    revalidateOnMount: initial.alerts === null,
     keepPreviousData: true,
   });
 
-  // Opening a ticket marks it read on the server; refresh the badge right after navigating.
+  // Opening a ticket marks it read on the server; refresh the badge right
+  // after navigating within Support. Other navigations don't touch tickets,
+  // and refetching here would rebuild device alerts on every page change.
+  const onSupportPage = pathname.startsWith("/portal/support");
   useEffect(() => {
-    void mutate();
-  }, [pathname, mutate]);
+    if (onSupportPage) void mutate();
+  }, [pathname, onSupportPage, mutate]);
 
   // Support notifications announcement
   const announcedSupport = useRef<Map<string, string> | null>(null);
@@ -77,8 +88,10 @@ export function usePortalNotifications(
   // Device alerts announcement
   const announcedAlerts = useRef<Set<string> | null>(null);
   useEffect(() => {
-    const alerts = data?.alerts ?? [];
-    const activeAlerts = alerts.filter((a) => a.active);
+    // Not loaded yet: wait, so the first real list becomes the baseline
+    // instead of every existing alert being announced as new.
+    if (!data?.alerts) return;
+    const activeAlerts = data.alerts.filter((a) => a.active);
     if (announcedAlerts.current === null) {
       announcedAlerts.current = new Set(activeAlerts.map((a) => a.id));
       return;
@@ -102,7 +115,8 @@ export function usePortalNotifications(
     for (const id of seen) if (!current.has(id)) seen.delete(id);
   }, [data?.alerts, router]);
 
-  return data ?? initial;
+  const current = data ?? initial;
+  return { support: current.support, alerts: current.alerts ?? [] };
 }
 
 export function useCustomerSupportNotifications(

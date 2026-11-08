@@ -30,10 +30,18 @@ export type SlashTenantUserTerminal = {
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 20;
 
-async function listAll<T>(path: string, key: string, query: Record<string, string | boolean>): Promise<T[]> {
+async function listAll<T>(
+  path: string,
+  key: string,
+  query: Record<string, string | boolean>,
+  revalidateSeconds?: number
+): Promise<T[]> {
   const all: T[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
-    const raw = await starlinkFetch<Record<string, unknown>>(path, { query: { ...query, page, limit: PAGE_LIMIT } });
+    const raw = await starlinkFetch<Record<string, unknown>>(path, {
+      query: { ...query, page, limit: PAGE_LIMIT },
+      revalidateSeconds,
+    });
     const batch = Array.isArray(raw?.[key]) ? (raw[key] as T[]) : [];
     all.push(...batch);
     const total = typeof raw?.totalCount === "number" ? raw.totalCount : all.length;
@@ -59,8 +67,18 @@ export async function listServiceLines(): Promise<SlashServiceLine[]> {
     }));
 }
 
-export async function listTenantUserTerminals(): Promise<SlashTenantUserTerminal[]> {
-  const rows = await listAll<Record<string, unknown>>("/user-terminals", "userTerminals", { includeInactive: true });
+/**
+ * Every user terminal on the tenant. Fresh by default (the Add Terminal form
+ * must see the account as it is right now); the terminal list views pass
+ * `{ revalidateSeconds }` so each page load doesn't wait on an uncached call.
+ */
+export async function listTenantUserTerminals(opts?: { revalidateSeconds?: number }): Promise<SlashTenantUserTerminal[]> {
+  const rows = await listAll<Record<string, unknown>>(
+    "/user-terminals",
+    "userTerminals",
+    { includeInactive: true },
+    opts?.revalidateSeconds
+  );
   return rows
     .filter((r) => text(r.userTerminalId))
     .map((r) => ({

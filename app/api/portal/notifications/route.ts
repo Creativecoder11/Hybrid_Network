@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { getCustomerSupportNotifications } from "@/lib/support/unread";
-import { getPortalContext } from "@/lib/accounts/access";
+import { listAuthorizedAccounts } from "@/lib/accounts/access";
 import { listTerminalAlerts, type EnrichedAlert } from "@/lib/terminals/alerts";
 
 // Polled by the customer portal shell (components/portal/PortalShell.tsx) so
@@ -11,18 +11,20 @@ export async function GET() {
   if (!user || !user.customerProfileId) {
     return NextResponse.json({ success: false, error: "Not authorized." }, { status: 403 });
   }
-  const support = await getCustomerSupportNotifications(user.customerProfileId);
 
-  let alerts: EnrichedAlert[] = [];
-  try {
-    const ctx = await getPortalContext();
-    if (ctx.accounts.length > 0) {
-      alerts = await listTerminalAlerts({ accountIds: ctx.accounts.map((a) => a.id) });
+  const loadAlerts = async (): Promise<EnrichedAlert[]> => {
+    try {
+      // Only the authorized account ids are needed — not the full portal context.
+      const accounts = await listAuthorizedAccounts(user);
+      if (accounts.length === 0) return [];
+      return await listTerminalAlerts({ accountIds: accounts.map((a) => a.id) });
+    } catch (err) {
+      console.error("[portal/notifications] failed to load device alerts:", err);
+      return [];
     }
-  } catch (err) {
-    console.error("[portal/notifications] failed to load device alerts:", err);
-  }
+  };
+
+  const [support, alerts] = await Promise.all([getCustomerSupportNotifications(user.customerProfileId), loadAlerts()]);
 
   return NextResponse.json({ support, alerts }, { headers: { "Cache-Control": "private, no-store" } });
 }
-

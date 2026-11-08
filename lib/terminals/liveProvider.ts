@@ -79,14 +79,24 @@ async function safe<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
 
 async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
   await connectDB();
-  const query: Record<string, unknown> = { "starlinkVesselIds.0": { $exists: true } };
+  const scoped = Boolean(filters?.accountIds || filters?.customerId);
+  // Unscoped (admin fleet): only accounts that carry vessel ids. Scoped
+  // (portal / one customer): every matching account, because an account
+  // without its own vessel ids can still fall back to the vessel id on its
+  // customer's profile.
+  const query: Record<string, unknown> = scoped ? {} : { "starlinkVesselIds.0": { $exists: true } };
   if (filters?.accountIds) query._id = { $in: filters.accountIds };
   if (filters?.customerId) query.customer = filters.customerId;
   const accounts = await CustomerAccount.find(query).select("accountNumber customer starlinkVesselIds").lean();
 
+  // One customer lookup for every account (was one query per account).
   const customerIds = Array.from(new Set(accounts.map((a) => a.customer.toString())));
-  const customers = await User.find({ _id: { $in: customerIds } }).select("name company").lean();
-  const nameById = new Map(customers.map((c) => [c._id.toString(), c.company || c.name]));
+  const customers = await User.find({ _id: { $in: customerIds } }).select("name company starlinkVesselId").lean();
+  const customerById = new Map(customers.map((c) => [c._id.toString(), c]));
+  const nameOf = (customerId: string) => {
+    const c = customerById.get(customerId);
+    return c ? c.company || c.name : null;
+  };
 
   const links: LiveLink[] = [];
   const seen = new Set<string>();
@@ -98,31 +108,26 @@ async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
         accountId: a._id.toString(),
         accountNumber: a.accountNumber,
         customerId: a.customer.toString(),
-        customerName: nameById.get(a.customer.toString()) ?? null,
+        customerName: nameOf(a.customer.toString()),
         vesselId,
       });
     }
   }
 
   // Also check if queried accounts have vessel ID on the customer's User profile
-  if (filters?.accountIds || filters?.customerId) {
-    const accQuery: Record<string, unknown> = {};
-    if (filters?.accountIds) accQuery._id = { $in: filters.accountIds };
-    if (filters?.customerId) accQuery.customer = filters.customerId;
-    const allMatchingAccs = await CustomerAccount.find(accQuery).select("accountNumber customer starlinkVesselIds").lean();
-    for (const acc of allMatchingAccs) {
-      if (!acc.starlinkVesselIds || acc.starlinkVesselIds.length === 0) {
-        const u = await User.findById(acc.customer).select("name company starlinkVesselId").lean();
-        if (u?.starlinkVesselId && !seen.has(u.starlinkVesselId)) {
-          seen.add(u.starlinkVesselId);
-          links.push({
-            accountId: acc._id.toString(),
-            accountNumber: acc.accountNumber,
-            customerId: acc.customer.toString(),
-            customerName: u.company || u.name,
-            vesselId: u.starlinkVesselId,
-          });
-        }
+  if (scoped) {
+    for (const acc of accounts) {
+      if (acc.starlinkVesselIds && acc.starlinkVesselIds.length > 0) continue;
+      const u = customerById.get(acc.customer.toString());
+      if (u?.starlinkVesselId && !seen.has(u.starlinkVesselId)) {
+        seen.add(u.starlinkVesselId);
+        links.push({
+          accountId: acc._id.toString(),
+          accountNumber: acc.accountNumber,
+          customerId: acc.customer.toString(),
+          customerName: u.company || u.name,
+          vesselId: u.starlinkVesselId,
+        });
       }
     }
   }
@@ -133,7 +138,8 @@ async function loadLinks(filters?: TerminalListFilters): Promise<LiveLink[]> {
 async function getEnrichedVessels(): Promise<SlashVessel[]> {
   const [vessels, tenantTerminals] = await Promise.all([
     safe("GET /vessels", listVessels),
-    safe("GET /user-terminals", listTenantUserTerminals),
+    // Same freshness window as the vessel list it is merged with.
+    safe("GET /user-terminals", () => listTenantUserTerminals({ revalidateSeconds: 30 })),
   ]);
 
   const vesselList = vessels ?? [];
@@ -581,11 +587,14 @@ export type LiveListResult = {
 
 export async function liveListTerminalsDetailed(filters?: TerminalListFilters): Promise<LiveListResult> {
   if (filters?.accountIds && filters.accountIds.length === 0) return { records: [], failedVesselIds: [] };
-  const links = await safe("load account vessel links", () => loadLinks(filters));
+  // Database links and the SLASH vessel list don't depend on each other.
+  const [links, allVessels] = await Promise.all([
+    safe("load account vessel links", () => loadLinks(filters)),
+    getEnrichedVessels(),
+  ]);
   if (links === null) return { records: [], failedVesselIds: [] };
 
   const scoped = Boolean(filters?.accountIds || filters?.customerId);
-  const allVessels = await getEnrichedVessels();
   if (scoped) {
     if (links.length === 0) return { records: [], failedVesselIds: [] };
     const sources = await loadSources(

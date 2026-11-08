@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getPortalContext, canAccessAccount } from "@/lib/accounts/access";
 import { applyLocationPolicy } from "@/lib/portal/features";
 import { getTerminal } from "@/lib/terminals/service";
-import { listTerminalAlerts } from "@/lib/terminals/alerts";
+import { listAlertsForTerminals, preloadAlertEpisodes } from "@/lib/terminals/alerts";
 import { DeviceDetailClient } from "@/components/portal/DeviceDetailClient";
 
 export const metadata: Metadata = {
@@ -21,6 +21,8 @@ export default async function PortalDeviceDetailPage({
   const ctx = await getPortalContext();
   const { id } = await params;
   const { tab } = (await searchParams) || {};
+  // Kick off the alert feed now so it loads alongside the terminal.
+  preloadAlertEpisodes();
   const terminal = await getTerminal(decodeURIComponent(id), ctx.account?.id);
 
   if (!terminal) notFound();
@@ -51,9 +53,7 @@ export default async function PortalDeviceDetailPage({
     terminal.activation.assignedCustomerId = ctx.profile.id;
   }
 
-  const alerts = await listTerminalAlerts({
-    accountIds: terminal.activation.assignedAccountId ? [terminal.activation.assignedAccountId] : [],
-  });
+  const alerts = terminal.activation.assignedAccountId ? await listAlertsForTerminals([terminal]) : [];
   const terminalAlerts = alerts.filter((a) => a.deviceId === terminal.id);
 
   return (

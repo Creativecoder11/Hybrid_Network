@@ -12,7 +12,6 @@ import { logoutAction } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/dal";
 import type { PortalAccountOption } from "@/lib/types/portal";
 import type { CustomerSupportNotifications } from "@/lib/support/unread";
-import type { EnrichedAlert } from "@/lib/terminals/alerts";
 
 function buildNav(trackingEnabled: boolean, unreadSupportCount: number): NavItem[] {
   return [
@@ -42,7 +41,6 @@ export function PortalShell({
   selectedAccountId,
   trackingEnabled,
   supportNotifications,
-  initialAlerts = [],
   children,
 }: {
   user: CurrentUser;
@@ -51,13 +49,13 @@ export function PortalShell({
   selectedAccountId: string | null;
   trackingEnabled: boolean;
   supportNotifications: CustomerSupportNotifications;
-  initialAlerts?: EnrichedAlert[];
   children: ReactNode;
 }) {
   const [, startTransition] = useTransition();
   const notifications = usePortalNotifications({
     support: supportNotifications,
-    alerts: initialAlerts,
+    // Loaded by the hook after mount — see app/portal/layout.tsx.
+    alerts: null,
   });
 
   return (

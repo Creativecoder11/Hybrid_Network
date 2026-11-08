@@ -3,7 +3,7 @@ import { listUserTerminalAlerts } from "@/lib/starlink/alerts";
 import { describeStarlinkError } from "@/lib/starlink/client";
 import { listTerminals } from "./service";
 import type { SlashAlertEpisode } from "@/lib/starlink/types";
-import type { TerminalListFilters } from "./types";
+import type { TerminalListFilters, TerminalRecord } from "./types";
 
 // Normalized alert episodes. GET /alerts/user-terminals returns every alert
 // for the whole SLASH tenant, so customer scoping happens here: an episode is
@@ -32,17 +32,43 @@ function humanize(name: string | undefined): string {
 
 export async function listTerminalAlerts(filters?: Pick<TerminalListFilters, "customerId" | "accountIds">): Promise<EnrichedAlert[]> {
   const scoped = Boolean(filters?.customerId || filters?.accountIds);
-  const terminals = await listTerminals(scoped ? filters : undefined);
+  if (filters?.accountIds && filters.accountIds.length === 0) return [];
+  // The terminal list and the tenant alert feed are independent — fetch both
+  // at once instead of one after the other.
+  const [terminals, episodes] = await Promise.all([listTerminals(scoped ? filters : undefined), loadEpisodes()]);
   if (scoped && terminals.length === 0) return [];
-  const byId = new Map(terminals.map((t) => [t.id, t]));
+  return buildAlerts(terminals, episodes, scoped);
+}
 
-  let episodes: SlashAlertEpisode[] = [];
+/**
+ * Alerts for terminals the caller already loaded (e.g. the device detail
+ * page), so it doesn't rebuild the whole account terminal list just to filter
+ * it back down to one device.
+ */
+export async function listAlertsForTerminals(terminals: TerminalRecord[]): Promise<EnrichedAlert[]> {
+  if (terminals.length === 0) return [];
+  return buildAlerts(terminals, await loadEpisodes(), true);
+}
+
+/** Starts the tenant alert-feed request early so a later alerts call finds it in flight or cached. */
+export function preloadAlertEpisodes(): void {
+  void loadEpisodes();
+}
+
+async function loadEpisodes(): Promise<SlashAlertEpisode[] | null> {
   try {
-    episodes = await listUserTerminalAlerts();
+    return await listUserTerminalAlerts();
   } catch (err) {
     console.error(`[alerts] failed to load /alerts/user-terminals: ${describeStarlinkError(err)}`);
-    return [];
+    return null;
   }
+}
+
+function buildAlerts(terminals: TerminalRecord[], episodes: SlashAlertEpisode[] | null, scoped: boolean): EnrichedAlert[] {
+  // Same as before: when the alert feed is unreachable, show no alerts at all
+  // rather than only the locally derived ones.
+  if (episodes === null) return [];
+  const byId = new Map(terminals.map((t) => [t.id, t]));
 
   const visible = scoped ? episodes.filter((e) => e.deviceId && byId.has(e.deviceId)) : episodes;
 
