@@ -35,13 +35,15 @@ body {
   font-family: var(--font-sans);
 }
 
-h2,
-h3,
-h4,
-h5,
-h6,
-.title {
-  font-family: var(--font-title);
+@layer base {
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  .title {
+    font-family: var(--font-title);
+  }
 }
 
 ::selection {

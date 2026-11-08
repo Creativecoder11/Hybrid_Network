@@ -31,13 +31,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             alt={isCustomer ? "Athena - Hybrid Networks" : "Hybrid Networks Logo"}
             width={isCustomer ? 180 : 200}
             height={isCustomer ? 180 : 209}
-            className={isCustomer ? "h-30 w-auto object-contain" : ""}
+            className={isCustomer ? "h-40 w-auto object-contain" : ""}
             priority
           />
         </div>
 
         <div className="relative max-w-xl z-10">
-          <h2 className="mt-4 text-6xl font-extrabold leading-tight text-text-primary">
+          <h2 className="mt-4 font-sans text-5xl font-extrabold leading-tight text-text-primary">
             {isCustomer ? (
               <>
                 One window. <br />
