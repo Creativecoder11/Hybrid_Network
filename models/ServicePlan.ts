@@ -1,7 +1,7 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+import { PLAN_PROVIDER_MAX_LENGTH } from "@/lib/plans/providers";
 
-export const PLAN_PROVIDERS = ["Starlink", "Fiber", "VSAT", "Other"] as const;
-export type PlanProvider = (typeof PLAN_PROVIDERS)[number];
+export { PLAN_PROVIDERS, PLAN_PROVIDER_MAX_LENGTH, type PlanProvider } from "@/lib/plans/providers";
 
 export const PLAN_TYPES = ["DATA", "VOICE", "HYBRID"] as const;
 export type PlanType = (typeof PLAN_TYPES)[number];
@@ -9,7 +9,7 @@ export type PlanType = (typeof PLAN_TYPES)[number];
 const ServicePlanSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    provider: { type: String, enum: PLAN_PROVIDERS, required: true },
+    provider: { type: String, required: true, trim: true, maxlength: PLAN_PROVIDER_MAX_LENGTH },
     planType: { type: String, enum: PLAN_TYPES, default: "DATA" },
     monthlyPrice: { type: Number, required: true, default: 0 },
     currency: { type: String, default: "USD" },

@@ -1,7 +1,7 @@
 export type PlanFull = {
   id: string;
   name: string;
-  provider: "Starlink" | "Fiber" | "VSAT" | "Other";
+  provider: string;
   planType: "DATA" | "VOICE" | "HYBRID";
   monthlyPrice: number;
   currency: string;

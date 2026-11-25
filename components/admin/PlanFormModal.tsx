@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/Switch";
 import { savePlanAction } from "@/lib/actions/plans";
 import type { ActionState } from "@/lib/actions/customers";
 import type { PlanFull } from "@/lib/types/plan";
+import { PLAN_PROVIDERS, PLAN_PROVIDER_MAX_LENGTH, PLAN_PROVIDER_OTHER as OTHER } from "@/lib/plans/providers";
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -23,6 +24,10 @@ function Field({ label, required, children }: { label: string; required?: boolea
 export function PlanFormModal({ plan, onClose }: { plan: PlanFull | null; onClose: () => void }) {
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(savePlanAction, undefined);
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
+  // A saved provider that isn't a preset was typed in under "Other".
+  const isPreset = !!plan && (PLAN_PROVIDERS as readonly string[]).includes(plan.provider);
+  const [providerChoice, setProviderChoice] = useState(!plan ? "Starlink" : isPreset ? plan.provider : OTHER);
+  const initialCustom = plan && !isPreset ? plan.provider : "";
 
   useEffect(() => {
     if (state?.success) onClose();
@@ -56,12 +61,27 @@ export function PlanFormModal({ plan, onClose }: { plan: PlanFull | null; onClos
             </Field>
           </div>
           <Field label="Provider" required>
-            <Select name="provider" defaultValue={plan?.provider ?? "Starlink"} required>
-              <option value="Starlink">Starlink</option>
-              <option value="Fiber">Fiber</option>
-              <option value="VSAT">VSAT</option>
-              <option value="Other">Other</option>
+            <Select name="provider" value={providerChoice} onChange={(e) => setProviderChoice(e.target.value)} required>
+              {PLAN_PROVIDERS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+              <option value={OTHER}>Other</option>
             </Select>
+            {providerChoice === OTHER && (
+              <div className="mt-3">
+                <Field label="Provider Name" required>
+                  <Input
+                    name="providerCustom"
+                    defaultValue={initialCustom}
+                    required
+                    maxLength={PLAN_PROVIDER_MAX_LENGTH}
+                    placeholder="e.g. Thuraya"
+                  />
+                </Field>
+              </div>
+            )}
           </Field>
           <Field label="Plan Type">
             <Select name="planType" defaultValue={plan?.planType ?? "DATA"}>

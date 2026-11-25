@@ -6,6 +6,7 @@ import { ServicePlan } from "@/models/ServicePlan";
 import { ActivityLog } from "@/models/ActivityLog";
 import { getAuthorizedUser } from "@/lib/auth/dal";
 import { servicePlanSchema } from "@/lib/validations/plan";
+import { PLAN_PROVIDER_OTHER } from "@/lib/plans/providers";
 import type { ActionState } from "@/lib/actions/customers";
 
 function str(formData: FormData, key: string): string {
@@ -21,10 +22,14 @@ export async function savePlanAction(
 
   const id = str(formData, "id");
 
+  // "Other" in the provider select means the admin typed a custom name.
+  const providerChoice = str(formData, "provider");
+  const provider = providerChoice === PLAN_PROVIDER_OTHER ? str(formData, "providerCustom") : providerChoice;
+
   const raw = {
     id: id || undefined,
     name: str(formData, "name"),
-    provider: str(formData, "provider"),
+    provider,
     planType: str(formData, "planType") || "DATA",
     monthlyPrice: str(formData, "monthlyPrice"),
     currency: str(formData, "currency") || "USD",
